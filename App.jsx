@@ -1,43 +1,3 @@
-金鑰
-
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyBkFqTUwtC7MqZ6h4--2_1BmldXEg-Haiw",
-  authDomain: "uniwawa-beauty.firebaseapp.com",
-  projectId: "uniwawa-beauty",
-  storageBucket: "uniwawa-beauty.firebasestorage.app",
-  messagingSenderId: "1009617609234",
-  appId: "1:1009617609234:web:3cb5466e79a81c1f1aaecb"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Heart, Instagram, Facebook, Calendar, Menu, X, CheckCircle, ChevronDown, Plus, Upload, Image as ImageIcon, Lock, Cloud, Loader2, Sparkles, ArrowRight, MapPin, Clock, MessageCircle, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
@@ -143,10 +103,9 @@ const App = () => {
         </div>
       </nav>
 
-      {/* 內容區 */}
       <main className="pt-32 pb-20 max-w-7xl mx-auto px-6">
         {notification && (
-          <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-[#463E3E] text-white px-8 py-3 rounded-full shadow-2xl z-50 animate-bounce">
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-[#463E3E] text-white px-8 py-3 rounded-full shadow-2xl z-50">
             {notification}
           </div>
         )}
