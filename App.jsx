@@ -40,7 +40,7 @@ const timeToMinutes = (timeStr) => {
   return h * 60 + m;
 };
 
-// --- 子組件：款式卡片 (徹底修正設定圖示消失問題) ---
+// --- 子組件：款式卡片 (含多圖輪播功能) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
@@ -57,44 +57,43 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
 
   return (
     <div className="group flex flex-col bg-white border border-[#F0EDEA] shadow-sm relative">
-      {/* 核心修正：將管理按鈕放在這層，完全避開圖片容器的 overflow-hidden */}
+      {/* 管理按鈕：置於相對父層，避免 overflow 剪裁 */}
       {isLoggedIn && (
-        <div className="absolute top-4 right-4 flex gap-2 z-[60]">
+        <div className="absolute top-4 right-4 flex gap-2 z-[30]">
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(item); }} 
-            className="p-2.5 bg-white/95 rounded-full text-blue-600 shadow-md hover:bg-white transition-all transform hover:scale-110 border border-blue-50"
+            className="p-2 bg-white/90 rounded-full text-blue-600 shadow-sm hover:scale-110 transition-transform"
           >
             <Edit3 size={16}/>
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} 
-            className="p-2.5 bg-white/95 rounded-full text-red-600 shadow-md hover:bg-white transition-all transform hover:scale-110 border border-red-50"
+            className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:scale-110 transition-transform"
           >
             <Trash2 size={16}/>
           </button>
         </div>
       )}
 
-      {/* 圖片區域 */}
-      <div className="aspect-[3/4] overflow-hidden relative">
+      {/* 圖片區域：多圖輪播 */}
+      <div className="aspect-[3/4] overflow-hidden relative bg-gray-50">
         <img 
           src={images[currentIdx]} 
           className="w-full h-full object-cover transition-opacity duration-300" 
           alt={item.title} 
         />
         
-        {/* 多圖切換按鈕 */}
         {images.length > 1 && (
           <>
             <button 
               onClick={prevImg} 
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"
             >
               <ChevronLeft size={20} />
             </button>
             <button 
               onClick={nextImg} 
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"
             >
               <ChevronRight size={20} />
             </button>
@@ -102,7 +101,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
               {images.map((_, i) => (
                 <div 
                   key={i} 
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentIdx ? 'bg-white w-3' : 'bg-white/40'}`} 
+                  className={`w-1.5 h-1.5 rounded-full ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} 
                 />
               ))}
             </div>
@@ -208,6 +207,7 @@ export default function App() {
   const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
   const [shopSettings, setShopSettings] = useState({ specificHolidays: [], maxCapacity: 1 });
+  const [newHolidayInput, setNewHolidayInput] = useState('');
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
@@ -244,16 +244,19 @@ export default function App() {
     );
   }, [user]);
 
+  const saveShopSettings = async (newSettings) => {
+    try { await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings); } catch (e) { alert("失敗"); }
+  };
+
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
     const checkMin = timeToMinutes(checkTimeStr);
     const bookingsToday = allBookings.filter(b => b.date === date);
-    const concurrentCount = bookingsToday.filter(b => {
+    return bookingsToday.filter(b => {
       const start = timeToMinutes(b.time);
-      const duration = Number(b.totalDuration) || 90;
-      return checkMin >= start && checkMin < start + duration + 20;
-    }).length;
-    return concurrentCount >= (shopSettings.maxCapacity || 1);
+      const end = start + (Number(b.totalDuration) || 90) + 20;
+      return checkMin >= start && checkMin < end;
+    }).length >= (shopSettings.maxCapacity || 1);
   };
 
   const handleConfirmBooking = async () => {
@@ -279,7 +282,6 @@ export default function App() {
       if (editingItem) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', editingItem.id), payload);
       else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), { ...payload, createdAt: serverTimestamp() });
       setIsUploadModalOpen(false);
-      setEditingItem(null);
       setFormData({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
     } catch (err) { alert("儲存失敗"); } finally { setIsUploading(false); }
   };
@@ -301,13 +303,17 @@ export default function App() {
           <div className="flex gap-6 text-sm tracking-widest font-medium uppercase items-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={activeTab === 'home' ? 'text-[#C29591]' : ''}>首頁</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
+            
+            {/* 修正鎖頭邏輯：不管怎樣都不消失，只依據登入狀態切換功能 */}
             {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2]">
                 <button onClick={() => {setEditingItem(null); setFormData({title:'', price:'', category:'極簡氣質', duration:'90', images:[]}); setIsUploadModalOpen(true)}} className="text-[#C29591]"><Plus size={18}/></button>
                 <button onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591]"><Settings size={18}/></button>
               </div>
             ) : (
-              <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 opacity-20"><Lock size={12}/></button>
+              <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 hover:text-[#C29591] transition-colors">
+                <Lock size={14}/>
+              </button>
             )}
           </div>
         </div>
@@ -316,6 +322,7 @@ export default function App() {
       <main className="pt-20">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
+            {/* 預約表單內容與您提供的代碼一致，已保留完整邏輯 */}
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -364,9 +371,10 @@ export default function App() {
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
             <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
-              <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" />
+              <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Beyond<br/>Expectation</h2>
+            {/* 修正1：內容更改為「點此預約」 */}
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
@@ -389,24 +397,25 @@ export default function App() {
         )}
       </main>
 
-      {/* 彈窗：管理密碼 */}
+      {/* 管理者登入彈窗 */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4">
           <div className="bg-white p-10 max-w-sm w-full shadow-2xl">
+            <h3 className="tracking-[0.5em] mb-10 font-light text-gray-400 text-sm uppercase text-center">Admin Access</h3>
             <form onSubmit={(e) => { e.preventDefault(); if(passwordInput==="8888") setIsLoggedIn(true); setIsAdminModalOpen(false); }}>
               <input type="password" placeholder="••••" className="w-full border-b py-4 text-center tracking-[1.5em] outline-none" onChange={e => setPasswordInput(e.target.value)} autoFocus />
-              <button className="w-full bg-[#463E3E] text-white py-4 mt-6">ENTER</button>
+              <button className="w-full bg-[#463E3E] text-white py-4 mt-6 text-xs tracking-widest">ENTER</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* 彈窗：上傳款式 */}
+      {/* 上傳款式彈窗 */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="tracking-widest font-light">款式發布</h3>
+              <h3 className="tracking-widest font-light">{editingItem ? '修改款式' : '上傳新款'}</h3>
               <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
             </div>
             <form onSubmit={handleItemSubmit} className="space-y-6">
@@ -418,7 +427,7 @@ export default function App() {
               <div className="flex flex-wrap gap-2">
                 {formData.images.map((img, i) => (
                   <div key={i} className="relative w-20 h-20 border">
-                    <img src={img} className="w-full h-full object-cover" />
+                    <img src={img} className="w-full h-full object-cover" alt="upload-preview" />
                     <button type="button" onClick={() => setFormData({...formData, images: formData.images.filter((_, idx) => idx !== i)})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
                   </div>
                 ))}
@@ -438,25 +447,42 @@ export default function App() {
         </div>
       )}
 
-      {/* 彈窗：預約管理 */}
+      {/* 預約管理彈窗 */}
       {isBookingManagerOpen && (
         <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl p-8 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center mb-8 border-b pb-4">
-              <h3 className="text-sm tracking-widest font-medium">預約管理</h3>
+              <h3 className="text-sm tracking-widest font-medium">系統管理</h3>
               <button onClick={() => setIsBookingManagerOpen(false)}><X size={24}/></button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {allBookings.map(b => (
-                <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6]">
-                  <div className="text-[11px]">
-                    <div className="font-bold text-sm">{b.date} {b.time}</div>
-                    <div>{b.name} • {b.phone}</div>
-                    <div className="text-[#C29591]">{b.itemTitle}</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-hidden">
+               <div className="overflow-y-auto pr-4 space-y-3">
+                  <h4 className="text-xs font-bold border-l-4 border-[#C29591] pl-2 uppercase tracking-widest">預約清單</h4>
+                  {allBookings.map(b => (
+                    <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6]">
+                      <div className="text-[11px]">
+                        <div className="font-bold text-sm">{b.date} {b.time}</div>
+                        <div>{b.name} • {b.phone}</div>
+                        <div className="text-[#C29591]">{b.itemTitle}</div>
+                      </div>
+                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id))} className="text-red-400"><Trash2 size={18}/></button>
+                    </div>
+                  ))}
+               </div>
+               <div className="space-y-6">
+                  <h4 className="text-xs font-bold border-l-4 border-[#C29591] pl-2 uppercase tracking-widest">公休日設定</h4>
+                  <div className="flex gap-2">
+                    <input type="date" className="flex-1 p-2 border text-xs" value={newHolidayInput} onChange={e => setNewHolidayInput(e.target.value)} />
+                    <button onClick={() => { if(!newHolidayInput) return; saveShopSettings({...shopSettings, specificHolidays: [...(shopSettings.specificHolidays || []), newHolidayInput]}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px]">新增</button>
                   </div>
-                  <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id))} className="text-red-400"><Trash2 size={18}/></button>
-                </div>
-              ))}
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                    {(shopSettings.specificHolidays || []).map(date => (
+                      <span key={date} className="text-[10px] bg-red-50 text-red-400 px-2 py-1 border flex items-center gap-1">
+                        {date} <X size={10} className="cursor-pointer" onClick={() => saveShopSettings({...shopSettings, specificHolidays: shopSettings.specificHolidays.filter(d => d !== date)})} />
+                      </span>
+                    ))}
+                  </div>
+               </div>
             </div>
           </div>
         </div>
