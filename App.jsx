@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -178,7 +178,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
   );
 };
 
-// --- 子組件：後台管理月曆 ---
+// --- 子組件：後台管理月曆 (修正版) ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -207,7 +207,8 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   };
 
   return (
-    <div className="w-full bg-white border border-[#EAE7E2] p-6 shadow-sm">
+    // 修改：增加 max-w-md 和 mx-auto 以適應手機版，減少 padding
+    <div className="w-full max-w-md mx-auto bg-white border border-[#EAE7E2] p-4 md:p-6 shadow-sm">
       <div className="flex justify-between items-center mb-6 px-2">
         <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">{currentYear}年 {currentMonth + 1}月</h4>
         <div className="flex gap-2">
@@ -245,7 +246,10 @@ export default function App() {
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
-  const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '', storeId: '' });
+  
+  // paymentMethod: '門市付款'
+  const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -300,7 +304,6 @@ export default function App() {
     const staffList = (shopSettings.staff || []).filter(s => s.storeId === bookingData.storeId);
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
     
-    // 若該店無員工設定，預設容量為 1，避免完全鎖死
     const availableStaffCount = staffList.length === 0 ? 1 : (staffList.length - onLeaveCount);
 
     if (availableStaffCount <= 0) return true;
@@ -450,7 +453,7 @@ export default function App() {
     : storeFilteredBookings;
 
   const handleExportCSV = () => {
-    const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長'];
+    const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長', '付款方式'];
     const rows = storeFilteredBookings.map(b => [ 
       b.date,
       b.time,
@@ -460,7 +463,8 @@ export default function App() {
       b.itemTitle,
       b.addonName,
       b.totalAmount,
-      b.totalDuration
+      b.totalDuration,
+      b.paymentMethod || '門市付款'
     ]);
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -475,9 +479,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between transition-all duration-300">
-          <h1 className="text-lg md:text-xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-3 md:mb-0" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
-          <div className="flex gap-4 md:gap-6 text-[11px] md:text-sm tracking-widest font-medium uppercase items-center">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between transition-all duration-300">
+          <h1 className="text-3xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-3 md:mb-0" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
+          <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={activeTab === 'home' ? 'text-[#C29591]' : ''}>首頁</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={activeTab === 'notice' ? 'text-[#C29591]' : ''}>須知</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
@@ -496,7 +500,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="pt-28 md:pt-20">
+      <main className="pt-32 md:pt-20">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
@@ -562,6 +566,15 @@ export default function App() {
                     if(val.length <= 10) setBookingData({...bookingData, phone: val});
                   }} 
                 />
+
+                {/* 新增：付款方式 (固定為門市付款) */}
+                <div className="relative md:col-span-2">
+                   <div className="flex items-center gap-2 border-b border-[#EAE7E2] py-2 text-gray-400">
+                      <CreditCard size={16}/>
+                      <span className="text-xs">付款方式：</span>
+                      <span className="text-[#463E3E] font-medium text-xs">門市付款</span>
+                   </div>
+                </div>
               </div>
 
               <div className="flex justify-center pt-2">
@@ -653,6 +666,10 @@ export default function App() {
                       {calcTotalDuration()} 分鐘
                     </span>
                   </div>
+                  <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                    <span className="text-gray-400">付款方式</span>
+                    <span className="font-medium text-[#463E3E]">{bookingData.paymentMethod}</span>
+                  </div>
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
@@ -724,8 +741,8 @@ export default function App() {
         ) : activeTab === 'search' ? ( 
           <div className="max-w-lg mx-auto py-12 px-6">
              <div className="text-center mb-12">
-                <h2 className="text-xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
-                <p className="text-[10px] text-gray-400 tracking-widest">請輸入預約時的姓名與電話以查詢</p>
+                <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
+                <p className="text-xs text-gray-400 tracking-widest">請輸入預約時的姓名與電話以查詢</p>
              </div>
 
              <form onSubmit={handleSearchBooking} className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
@@ -794,6 +811,11 @@ export default function App() {
                         <span className="text-gray-400">預計總時長</span>
                         <span className="font-medium text-[#463E3E]">{searchResult.totalDuration} 分鐘</span>
                       </div>
+                      {/* 查詢結果新增付款方式顯示 */}
+                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                        <span className="text-gray-400">付款方式</span>
+                        <span className="font-medium text-[#463E3E]">{searchResult.paymentMethod || '門市付款'}</span>
+                      </div>
                     </div>
 
                     <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
@@ -808,7 +830,6 @@ export default function App() {
              )}
           </div>
         ) : activeTab === 'store' ? (
-          // --- 新增：門市資訊頁面 ---
           <div className="max-w-4xl mx-auto py-16 px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">STORE LOCATIONS / 門市資訊</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -824,7 +845,12 @@ export default function App() {
                         <MapPin size={16} className="text-[#C29591] flex-shrink-0 mt-0.5" />
                         <span>桃園區文中三路 67 號 1 樓</span>
                      </div>
-                     <button className="w-full border border-[#EAE7E2] py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white hover:border-[#463E3E] transition-all">GOOGLE MAPS</button>
+                     <button 
+                        onClick={() => window.open('https://www.google.com/maps/search/?api=1&query=桃園區文中三路67號1樓', '_blank')}
+                        className="w-full border border-[#EAE7E2] py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white hover:border-[#463E3E] transition-all"
+                     >
+                        GOOGLE MAPS
+                     </button>
                   </div>
                </div>
             </div>
@@ -835,7 +861,7 @@ export default function App() {
             <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">UNIWAWA</h2>
+            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
@@ -1154,6 +1180,8 @@ export default function App() {
                               {b.itemTitle} 
                               {b.addonName && b.addonName !== '無' ? <span className="text-[#C29591]"> + {b.addonName}</span> : ''}
                             </div>
+                            {/* 後台列表顯示付款方式 */}
+                            <div className="text-[10px] text-gray-400 mt-0.5">付款: {b.paymentMethod || '門市付款'}</div>
                           </div>
                           <button onClick={() => { if(confirm('確定取消此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)); }} className="text-gray-300 hover:text-red-500 transition-colors p-2"><Trash2 size={16}/></button>
                         </div>
