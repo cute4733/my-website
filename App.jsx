@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight, Users, UserMinus } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Sparkles } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -81,7 +81,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         <div className="flex items-center gap-1.5 text-gray-400 text-[10px] mb-4 uppercase tracking-widest font-light"><Clock size={12} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         <select className="w-full text-[11px] border border-[#EAE7E2] py-3 px-4 bg-[#FAF9F6] mb-8 outline-none" onChange={(e) => setSelectedAddon(addons.find(a => a.id === e.target.value) || null)}>
-          <option value="">請選擇指甲現況</option>
+          <option value="">請選擇指甲現況 (非必選)</option>
           {addons.map(a => (<option key={a.id} value={a.id}>{a.name} (+${a.price} / {a.duration}分)</option>))}
         </select>
         <button onClick={() => onBook(item)} className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors">點此預約</button>
@@ -90,7 +90,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
   );
 };
 
-// --- 子組件：月曆 (整合請假判斷) ---
+// --- 子組件：月曆 ---
 const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -105,15 +105,10 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
     for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="h-10 w-10"></div>);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      
-      // 判斷全店公休
       const isShopHoliday = (settings?.specificHolidays || []).includes(dateStr);
-      
-      // 判斷是否全員請假 (可用人數為 0)
       const staffList = settings?.staff || [];
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
-
       const isPast = new Date(currentYear, currentMonth, d) < today;
       const isDisabled = isShopHoliday || isAllOnLeave || isPast;
       const isSelected = selectedDate === dateStr;
@@ -153,11 +148,12 @@ export default function App() {
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
-  
-  // 升級設定狀態：包含人員與請假
   const [shopSettings, setShopSettings] = useState({ specificHolidays: [], staff: [] });
   const [newHolidayInput, setNewHolidayInput] = useState('');
   
+  // 新增加購品輸入狀態
+  const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
+
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
@@ -194,14 +190,11 @@ export default function App() {
     );
   }, [user]);
 
-  // --- 更新後的產能計算：上班人數 = 總人數 - 請假人數 ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
-    
     const staffList = shopSettings.staff || [];
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
     const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 1;
-
     const checkMin = timeToMinutes(checkTimeStr);
     const concurrent = allBookings.filter(b => {
       if (b.date !== date) return false;
@@ -209,12 +202,26 @@ export default function App() {
       const end = start + (Number(b.totalDuration) || 90) + 20;
       return checkMin >= start && checkMin < end;
     });
-
     return concurrent.length >= availableStaffCount;
   };
 
   const saveShopSettings = async (newSettings) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
+  };
+
+  // 新增加購品處理函式
+  const handleAddAddon = async (e) => {
+    e.preventDefault();
+    if(!addonForm.name || !addonForm.price) return;
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), {
+        ...addonForm,
+        price: Number(addonForm.price),
+        duration: Number(addonForm.duration || 0),
+        createdAt: serverTimestamp()
+      });
+      setAddonForm({ name: '', price: '', duration: '' });
+    } catch (err) { alert("新增失敗"); }
   };
 
   const handleConfirmBooking = async () => {
@@ -363,7 +370,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 管理彈窗：新增人員管理與請假設定 */}
+      {/* 管理彈窗：包含人員與【加購品設定】 */}
       {isBookingManagerOpen && (
         <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-5xl h-[85vh] shadow-2xl flex flex-col overflow-hidden rounded-sm">
@@ -373,6 +380,45 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
+              
+              {/* 加購品管理區塊 (修復處) */}
+              <section className="space-y-6">
+                <div className="border-l-4 border-[#C29591] pl-4">
+                  <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品設定 (指甲現況)</h4>
+                  <p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「延甲」等額外服務的金額與所需時間</p>
+                </div>
+
+                <form onSubmit={handleAddAddon} className="bg-[#FAF9F6] p-5 border border-[#EAE7E2] grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">名稱 (如：現場卸甲)</label>
+                    <input type="text" className="w-full border p-2 text-xs outline-none" placeholder="項目名稱" value={addonForm.name} onChange={e => setAddonForm({...addonForm, name: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">加價金額</label>
+                    <input type="number" className="w-full border p-2 text-xs outline-none" placeholder="NT$" value={addonForm.price} onChange={e => setAddonForm({...addonForm, price: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">所需時間 (分鐘)</label>
+                    <input type="number" className="w-full border p-2 text-xs outline-none" placeholder="分鐘" value={addonForm.duration} onChange={e => setAddonForm({...addonForm, duration: e.target.value})} />
+                  </div>
+                  <button className="bg-[#463E3E] text-white py-2.5 text-[10px] tracking-widest uppercase hover:bg-[#C29591] transition-colors">新增項目</button>
+                </form>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {addons.map(addon => (
+                    <div key={addon.id} className="border border-[#EAE7E2] p-4 flex justify-between items-center bg-white shadow-sm hover:border-[#C29591] transition-colors">
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-[#463E3E]">{addon.name}</div>
+                        <div className="text-[10px] text-gray-400">+ NT$ {addon.price} / {addon.duration} 分鐘</div>
+                      </div>
+                      <button onClick={() => { if(confirm('確定刪除此加購項？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', addon.id)); }}>
+                        <Trash2 size={14} className="text-gray-300 hover:text-red-500"/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               {/* 人員管理區塊 */}
               <section className="space-y-6">
                 <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
@@ -427,8 +473,8 @@ export default function App() {
                 </div>
               </section>
 
-              {/* 原有功能：全店公休與預約清單 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              {/* 全店公休與預約清單 */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 border-t pt-12">
                 <section className="space-y-6">
                    <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">全店公休日設定</h4>
                    <div className="flex gap-2">
@@ -452,7 +498,7 @@ export default function App() {
                         <div>
                           <div className="font-bold text-sm">{b.date} {b.time}</div>
                           <div>{b.name} • {b.phone}</div>
-                          <div className="text-[#C29591]">{b.itemTitle}</div>
+                          <div className="text-[#C29591]">{b.itemTitle} + {b.addonName}</div>
                         </div>
                         <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id))} className="text-gray-300 hover:text-red-500"><Trash2 size={18}/></button>
                       </div>
@@ -465,7 +511,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 款式上傳彈窗 - 同原代碼內容 */}
+      {/* 款式上傳彈窗 */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
