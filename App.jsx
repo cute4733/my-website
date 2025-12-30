@@ -20,7 +20,6 @@ const appId = 'uniwawa01';
 // --- 常數設定 ---
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上'];
-const WEEKDAYS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
 // 生成 10 分鐘一格的時段
 const generateTimeSlots = () => {
@@ -50,8 +49,8 @@ export default function App() {
   const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
   
-  // 店休與系統設定狀態
-  const [shopSettings, setShopSettings] = useState({ closedDays: [1], specificHolidays: [], maxCapacity: 1 });
+  // 系統設定狀態 (移除 closedDays 固定公休)
+  const [shopSettings, setShopSettings] = useState({ specificHolidays: [], maxCapacity: 1 });
   const [newHolidayInput, setNewHolidayInput] = useState('');
   
   const [bookingStep, setBookingStep] = useState('none');
@@ -81,17 +80,16 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    // 1. 監聽店內設定 (增加防崩潰保護)
+    // 1. 監聽店內設定
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings'), (d) => {
       if (d.exists()) {
         const data = d.data();
         setShopSettings({
-          closedDays: Array.isArray(data.closedDays) ? data.closedDays : [1],
           specificHolidays: Array.isArray(data.specificHolidays) ? data.specificHolidays : [],
           maxCapacity: Number(data.maxCapacity) || 1
         });
       } else {
-        setShopSettings({ closedDays: [1], specificHolidays: [], maxCapacity: 1 });
+        setShopSettings({ specificHolidays: [], maxCapacity: 1 });
       }
     });
 
@@ -119,16 +117,24 @@ export default function App() {
     } catch (e) { alert("設定儲存失敗"); }
   };
 
-  // 檢查時段是否客滿
+  // 檢查該日期是否為公休日 (僅檢查特定公休)
+  const isDateClosed = (dateStr) => {
+    if (!dateStr) return false;
+    return (shopSettings.specificHolidays || []).includes(dateStr);
+  };
+
+  // 檢查時段是否客滿 (如果是公休日，則全部回傳 true)
   const isTimeSlotFull = (date, checkTimeStr) => {
-    if (!date || !checkTimeStr || !allBookings) return false;
+    if (!date || !checkTimeStr) return false;
+    if (isDateClosed(date)) return true;
+    
     const checkMin = timeToMinutes(checkTimeStr);
     const bookingsToday = allBookings.filter(b => b.date === date);
     
     const concurrentCount = bookingsToday.filter(b => {
       const start = timeToMinutes(b.time);
       const duration = Number(b.totalDuration) || 90;
-      const end = start + duration + 20; // 服務時間 + 20 分鐘清潔緩衝
+      const end = start + duration + 20;
       return checkMin >= start && checkMin < end;
     }).length;
 
@@ -139,15 +145,13 @@ export default function App() {
   const handleDateChange = (e) => {
     const dateStr = e.target.value;
     if (!dateStr) return;
-    const dateObj = new Date(dateStr);
-    const dayOfWeek = dateObj.getDay();
 
-    if (shopSettings.closedDays.includes(dayOfWeek) || shopSettings.specificHolidays.includes(dateStr)) {
-      alert("抱歉，該日期為店休日，請選擇其他時段。");
+    if (isDateClosed(dateStr)) {
+      alert("抱歉，該日期為店休公休日，請選擇其他日期。");
       setBookingData({ ...bookingData, date: '', time: '' });
       e.target.value = '';
     } else {
-      setBookingData({ ...bookingData, date: dateStr });
+      setBookingData({ ...bookingData, date: dateStr, time: '' });
     }
   };
 
@@ -209,7 +213,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
-      {/* 導覽列 */}
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <h1 className="text-xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E]" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
@@ -228,11 +231,9 @@ export default function App() {
       </nav>
 
       <main className="pt-20">
-        {/* 預約填單流程 */}
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
-            
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
@@ -260,31 +261,23 @@ export default function App() {
                 <input type="text" placeholder="顧客姓名" className="border-b py-2 outline-none focus:border-[#C29591]" onChange={e => setBookingData({...bookingData, name: e.target.value})} />
                 <input type="tel" placeholder="聯絡電話" className="border-b py-2 outline-none focus:border-[#C29591]" onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
               </div>
-              
               <div className="space-y-2">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">選擇日期 (週一店休)</p>
-                <input type="date" className="w-full border p-3 bg-[#FAF9F6]" onChange={handleDateChange} />
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">選擇日期</p>
+                <input type="date" className="w-full border p-3 bg-[#FAF9F6]" onChange={handleDateChange} value={bookingData.date} />
               </div>
-
               <div className="space-y-2">
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">選擇時段 (包含清潔緩衝)</p>
                 <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
                   {TIME_SLOTS.map(t => {
                     const full = isTimeSlotFull(bookingData.date, t);
                     return (
-                      <button 
-                        key={t} 
-                        disabled={full}
-                        onClick={() => setBookingData({...bookingData, time:t})} 
-                        className={`py-2 text-[10px] border transition-all ${full ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : bookingData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white text-gray-400 hover:border-[#C29591]'}`}
-                      >
+                      <button key={t} disabled={full} onClick={() => setBookingData({...bookingData, time:t})} className={`py-2 text-[10px] border transition-all ${full ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : bookingData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white text-gray-400 hover:border-[#C29591]'}`}>
                         {t}
                       </button>
                     );
                   })}
                 </div>
               </div>
-
               <button disabled={isSubmitting} onClick={handleConfirmBooking} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase hover:bg-[#C29591] transition-all">
                 {isSubmitting ? '處理中...' : '確認送出預約'}
               </button>
@@ -292,17 +285,14 @@ export default function App() {
             </div>
           </div>
         ) : bookingStep === 'success' ? (
-          /* 預約成功 - 收據風格版本 */
           <div className="max-w-md mx-auto py-20 px-6 animate-in fade-in zoom-in duration-500">
             <div className="text-center mb-10">
               <CheckCircle size={56} className="text-[#C29591] mx-auto mb-4" />
               <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E]">預約成功</h2>
               <p className="text-xs text-gray-400 mt-2 tracking-widest uppercase font-light">Your appointment has been received</p>
             </div>
-
             <div className="bg-white border border-[#EAE7E2] shadow-xl p-8 space-y-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 bg-[#463E3E] text-white text-[8px] px-3 py-1 tracking-[0.2em] uppercase">Official Receipt</div>
-              
               <div className="border-b border-dashed pb-4">
                 <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">Reservation Details</p>
                 <div className="flex justify-between items-baseline">
@@ -310,7 +300,6 @@ export default function App() {
                   <span className="text-xs font-mono text-gray-400">{bookingData.phone}</span>
                 </div>
               </div>
-
               <div className="space-y-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-400 font-light">預約日期 Date</span>
@@ -324,12 +313,7 @@ export default function App() {
                   <span className="text-gray-400 font-light">選擇款式 Style</span>
                   <span className="text-[#463E3E]">{selectedItem?.title}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-400 font-light">附加服務 Add-on</span>
-                  <span className="text-[#463E3E]">{selectedAddon?.name || '無'}</span>
-                </div>
               </div>
-
               <div className="pt-4 border-t border-[#FAF9F6] flex justify-between items-end">
                 <div>
                   <span className="text-[10px] text-gray-400 block uppercase">Total Time</span>
@@ -340,16 +324,9 @@ export default function App() {
                   <span className="text-2xl font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}</span>
                 </div>
               </div>
-
               <p className="text-[9px] text-center text-gray-300 tracking-widest uppercase pt-4">請截圖此畫面並於預約時間準時抵達</p>
             </div>
-
-            <button 
-              onClick={() => {setBookingStep('none'); setActiveTab('home');}} 
-              className="w-full mt-10 border border-[#EAE7E2] py-4 text-[10px] tracking-[0.4em] uppercase hover:bg-[#463E3E] hover:text-white transition-all"
-            >
-              Back to Home
-            </button>
+            <button onClick={() => {setBookingStep('none'); setActiveTab('home');}} className="w-full mt-10 border border-[#EAE7E2] py-4 text-[10px] tracking-[0.4em] uppercase hover:bg-[#463E3E] hover:text-white transition-all">Back to Home</button>
           </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
@@ -361,7 +338,6 @@ export default function App() {
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">進入作品集</button>
           </div>
         ) : (
-          /* 作品集頁面 */
           <div className="max-w-7xl mx-auto px-6 py-12">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
               {filteredItems.map(item => (
@@ -378,13 +354,9 @@ export default function App() {
                   <div className="p-8 flex flex-col items-center text-center">
                     <span className="text-[10px] text-[#C29591] tracking-[0.4em] uppercase mb-2 font-medium">{item.category}</span>
                     <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
-                    
-                    {/* 服務時間顯示 */}
                     <div className="flex items-center gap-1.5 text-gray-400 text-[10px] mb-4 uppercase tracking-widest font-light">
-                      <Clock size={12} />
-                      預計服務：{item.duration || '90'} 分鐘
+                      <Clock size={12} /> 預計服務：{item.duration || '90'} 分鐘
                     </div>
-
                     <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
                     <select className="w-full text-[11px] border border-[#EAE7E2] py-3 px-4 bg-[#FAF9F6] mb-8 outline-none" onChange={(e) => setSelectedAddon(addons.find(a => a.id === e.target.value) || null)}>
                       <option value="">請選擇指甲現況</option>
@@ -399,7 +371,6 @@ export default function App() {
         )}
       </main>
 
-      {/* 後台管理彈窗 (含店休設定) */}
       {isBookingManagerOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-y-auto p-8 shadow-2xl">
@@ -425,24 +396,13 @@ export default function App() {
               </div>
               <div className="space-y-8 border-l lg:pl-10">
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold border-l-4 border-[#C29591] pl-2 uppercase tracking-widest">固定週休設定</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {WEEKDAYS.map((day, idx) => (
-                      <button key={day} onClick={() => {
-                        const newDays = shopSettings.closedDays.includes(idx) ? shopSettings.closedDays.filter(d => d !== idx) : [...shopSettings.closedDays, idx];
-                        saveShopSettings({ ...shopSettings, closedDays: newDays });
-                      }} className={`px-3 py-2 text-[10px] border ${shopSettings.closedDays.includes(idx) ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-400 border-gray-200'}`}>{day}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold border-l-4 border-[#C29591] pl-2 uppercase tracking-widest">特定日期公休</h4>
+                  <h4 className="text-xs font-bold border-l-4 border-[#C29591] pl-2 uppercase tracking-widest">特定日期公休設定</h4>
                   <div className="flex gap-2">
                     <input type="date" className="flex-1 p-2 border text-xs" value={newHolidayInput} onChange={e => setNewHolidayInput(e.target.value)} />
-                    <button onClick={() => { if(!newHolidayInput) return; saveShopSettings({...shopSettings, specificHolidays: [...shopSettings.specificHolidays, newHolidayInput]}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px]">新增</button>
+                    <button onClick={() => { if(!newHolidayInput) return; saveShopSettings({...shopSettings, specificHolidays: [...(shopSettings.specificHolidays || []), newHolidayInput]}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px]">新增公休</button>
                   </div>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {shopSettings.specificHolidays.map(date => (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {(shopSettings.specificHolidays || []).map(date => (
                       <div key={date} className="flex justify-between items-center text-[10px] bg-[#FAF9F6] p-2 border border-dashed">
                         <span>{date}</span>
                         <button onClick={() => saveShopSettings({...shopSettings, specificHolidays: shopSettings.specificHolidays.filter(d => d !== date)})} className="text-red-300">移除</button>
@@ -456,7 +416,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 登入彈窗 */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
           <div className="bg-white p-10 max-w-sm w-full shadow-2xl text-center">
@@ -469,7 +428,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 上傳款式彈窗 */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-[120] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
