@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Sparkles, CreditCard, Timer } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Sparkles } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -19,6 +19,7 @@ const appId = 'uniwawa01';
 
 // --- 常數設定 ---
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
+const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 const generateTimeSlots = () => {
@@ -40,9 +41,26 @@ const timeToMinutes = (timeStr) => {
 };
 
 // --- 子組件：款式卡片 ---
+// 更新：接收 addons 參數並連動下拉選單
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
+
+  const nextImg = (e) => {
+    e.stopPropagation();
+    setCurrentIdx((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImg = (e) => {
+    e.stopPropagation();
+    setCurrentIdx((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  const handleAddonChange = (e) => {
+    const addonId = e.target.value;
+    const addon = addons.find(a => a.id === addonId);
+    setSelectedAddon(addon || null);
+  };
 
   return (
     <div className="group flex flex-col bg-white border border-[#F0EDEA] shadow-sm relative">
@@ -56,8 +74,11 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         <img src={images[currentIdx]} className="w-full h-full object-cover transition-opacity duration-300" alt={item.title} />
         {images.length > 1 && (
           <>
-            <button onClick={(e) => { e.stopPropagation(); setCurrentIdx(p => (p - 1 + images.length) % images.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"><ChevronLeft size={20} /></button>
-            <button onClick={(e) => { e.stopPropagation(); setCurrentIdx(p => (p + 1) % images.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"><ChevronRight size={20} /></button>
+            <button onClick={prevImg} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"><ChevronLeft size={20} /></button>
+            <button onClick={nextImg} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"><ChevronRight size={20} /></button>
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+              {images.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} />))}
+            </div>
           </>
         )}
       </div>
@@ -66,10 +87,17 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
         <div className="flex items-center gap-1.5 text-gray-400 text-[10px] mb-4 uppercase tracking-widest font-light"><Clock size={12} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
-        <select className="w-full text-[11px] border border-[#EAE7E2] py-3 px-4 bg-[#FAF9F6] mb-8 outline-none" onChange={(e) => setSelectedAddon(addons.find(a => a.id === e.target.value) || null)}>
+        
+        {/* 加購品下拉選單 */}
+        <select className="w-full text-[11px] border border-[#EAE7E2] py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E]" onChange={handleAddonChange}>
           <option value="">請選擇指甲現況 (非必選)</option>
-          {addons.map(a => (<option key={a.id} value={a.id}>{a.name} (+${a.price} / {a.duration}分)</option>))}
+          {addons.map(a => (
+            <option key={a.id} value={a.id}>
+              {a.name} (+${a.price} / +{a.duration}分)
+            </option>
+          ))}
         </select>
+
         <button onClick={() => onBook(item)} className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors">點此預約</button>
       </div>
     </div>
@@ -102,7 +130,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
       days.push(
         <button key={d} disabled={isDisabled} onClick={() => onDateSelect(dateStr)}
           className={`h-10 w-10 text-[11px] rounded-full flex items-center justify-center transition-all 
-            ${isDisabled ? 'text-gray-200 line-through cursor-not-allowed' : isSelected ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>
+          ${isDisabled ? 'text-gray-200 line-through cursor-not-allowed' : isSelected ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>
           {d}
         </button>
       );
@@ -132,15 +160,17 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cloudItems, setCloudItems] = useState([]);
-  const [addons, setAddons] = useState([]);
+  const [addons, setAddons] = useState([]); // 加購品列表狀態
   const [allBookings, setAllBookings] = useState([]);
   const [shopSettings, setShopSettings] = useState({ specificHolidays: [], staff: [] });
   const [newHolidayInput, setNewHolidayInput] = useState('');
   
+  // 新增加購品輸入表單狀態
   const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
+
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedAddon, setSelectedAddon] = useState(null);
+  const [selectedAddon, setSelectedAddon] = useState(null); // 當前選中的加購品
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -149,6 +179,7 @@ export default function App() {
   const [editingItem, setEditingItem] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [styleFilter, setStyleFilter] = useState('全部');
+  const [priceFilter, setPriceFilter] = useState('全部');
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
 
@@ -165,6 +196,7 @@ export default function App() {
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), (s) => 
       setCloudItems(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
+    // 監聽加購品資料
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), (s) => 
       setAddons(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
@@ -182,17 +214,33 @@ export default function App() {
     const concurrent = allBookings.filter(b => {
       if (b.date !== date) return false;
       const start = timeToMinutes(b.time);
-      const end = start + (Number(b.totalDuration) || 90) + 20;
+      const end = start + (Number(b.totalDuration) || 90) + 20; // 緩衝20分鐘
       return checkMin >= start && checkMin < end;
     });
     return concurrent.length >= availableStaffCount;
   };
 
+  const saveShopSettings = async (newSettings) => {
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
+  };
+
+  // --- 新增：處理加購品新增 ---
+  const handleAddAddon = async (e) => {
+    e.preventDefault();
+    if(!addonForm.name || !addonForm.price) return;
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), {
+        ...addonForm,
+        price: Number(addonForm.price),
+        duration: Number(addonForm.duration || 0),
+        createdAt: serverTimestamp()
+      });
+      setAddonForm({ name: '', price: '', duration: '' }); // 重置表單
+      alert('加購項目已新增');
+    } catch (err) { alert("新增失敗：" + err.message); }
+  };
+
   const handleConfirmBooking = async () => {
-    if(!bookingData.name || !bookingData.phone || !bookingData.time) {
-        alert("請完整填寫資訊");
-        return;
-    }
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
@@ -219,6 +267,15 @@ export default function App() {
     } catch (err) { alert("儲存失敗"); } finally { setIsUploading(false); }
   };
 
+  const filteredItems = cloudItems.filter(item => {
+    const matchStyle = styleFilter === '全部' || item.category === styleFilter;
+    let matchPrice = true;
+    if (priceFilter === '1300以下') matchPrice = item.price < 1300;
+    else if (priceFilter === '1300-1900') matchPrice = item.price >= 1300 && item.price <= 1900;
+    else if (priceFilter === '1900以上') matchPrice = item.price > 1900;
+    return matchStyle && matchPrice;
+  });
+
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
@@ -241,99 +298,52 @@ export default function App() {
 
       <main className="pt-20">
         {bookingStep === 'form' ? (
-          <div className="max-w-4xl mx-auto px-6 py-12">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">BOOKING DETAILS / 預約詳情</h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-              {/* 左側：訂單卡片 */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white border border-[#EAE7E2] overflow-hidden shadow-sm">
-                  <div className="relative aspect-[4/5] bg-gray-50">
-                    <img src={selectedItem?.images?.[0] || 'https://via.placeholder.com/400x533'} className="w-full h-full object-cover" alt="item" />
-                    <div className="absolute top-4 left-4 bg-[#463E3E] text-white text-[9px] px-3 py-1 tracking-[0.2em] uppercase">預約項目</div>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    <div>
-                      <h3 className="text-lg font-medium text-[#463E3E] tracking-widest">{selectedItem?.title}</h3>
-                      <p className="text-xs text-[#C29591] mt-1 font-bold">{selectedAddon ? `加購：${selectedAddon.name}` : '無額外加購'}</p>
-                    </div>
-                    
-                    <div className="pt-4 border-t border-[#F0EDEA] space-y-3">
-                        <div className="flex justify-between items-center text-xs">
-                           <span className="text-gray-400 flex items-center gap-2"><CreditCard size={14}/> 預估總金額</span>
-                           <span className="font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                           <span className="text-gray-400 flex items-center gap-2"><Timer size={14}/> 預估總時間</span>
-                           <span className="font-bold text-[#463E3E]">{((Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0))} 分鐘</span>
-                        </div>
-                    </div>
-                  </div>
+          <div className="max-w-2xl mx-auto px-6 py-12">
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
+            <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                   <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
+                      {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="preview" />}
+                   </div>
+                   <div className="flex-1 space-y-1">
+                    <p className="text-[10px] text-[#C29591] tracking-widest uppercase font-bold">預約項目</p>
+                    <p className="text-sm font-medium">{selectedItem?.title} {selectedAddon ? `+ ${selectedAddon.name}` : ''}</p>
+                    <p className="text-[10px] text-gray-400">
+                        預計時間: {(Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0)} 分鐘
+                    </p>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-[10px] text-gray-400 tracking-widest uppercase">總金額</p>
+                      <p className="text-lg font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}</p>
+                   </div>
                 </div>
+            </div>
+            <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <input type="text" placeholder="顧客姓名" className="border-b py-2 outline-none" onChange={e => setBookingData({...bookingData, name: e.target.value})} />
+                <input type="tel" placeholder="聯絡電話" className="border-b py-2 outline-none" onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
               </div>
-
-              {/* 右側：填寫資訊 */}
-              <div className="lg:col-span-3 bg-white border border-[#EAE7E2] p-8 shadow-sm">
-                <div className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] tracking-widest text-gray-400 uppercase font-bold">顧客姓名 NAME</label>
-                      <div className="flex items-center border-b border-[#EAE7E2] focus-within:border-[#C29591] transition-colors">
-                        <User size={16} className="text-gray-300 mr-2"/>
-                        <input type="text" placeholder="輸入姓名" className="w-full py-2 outline-none text-sm bg-transparent" onChange={e => setBookingData({...bookingData, name: e.target.value})} />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] tracking-widest text-gray-400 uppercase font-bold">聯絡電話 PHONE</label>
-                      <div className="flex items-center border-b border-[#EAE7E2] focus-within:border-[#C29591] transition-colors">
-                        <Phone size={16} className="text-gray-300 mr-2"/>
-                        <input type="tel" placeholder="09XX-XXX-XXX" className="w-full py-2 outline-none text-sm bg-transparent" onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <label className="text-[10px] tracking-widest text-gray-400 uppercase font-bold block text-center">選擇預約日期 DATE</label>
-                    <div className="flex justify-center">
-                      <CustomCalendar selectedDate={bookingData.date} onDateSelect={(d) => setBookingData({...bookingData, date: d, time: ''})} settings={shopSettings} />
-                    </div>
-                  </div>
-
-                  {bookingData.date && (
-                    <div className="space-y-4 animate-fade-in">
-                      <label className="text-[10px] tracking-widest text-gray-400 uppercase font-bold block text-center">預約時段 TIME SLOT</label>
-                      <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                        {TIME_SLOTS.map(t => (
-                          <button key={t} disabled={isTimeSlotFull(bookingData.date, t)} onClick={() => setBookingData({...bookingData, time:t})} 
-                            className={`py-2 text-[10px] border transition-all ${bookingData.time===t ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white border-[#EAE7E2] hover:border-[#C29591] disabled:opacity-20 disabled:bg-gray-50'}`}>
-                            {t}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <button disabled={isSubmitting || !bookingData.time} onClick={handleConfirmBooking} 
-                    className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-[0.3em] font-medium uppercase hover:bg-[#C29591] transition-colors shadow-lg disabled:bg-gray-300">
-                    {isSubmitting ? '處理中...' : '確認發送預約請求'}
-                  </button>
-                  <p className="text-[9px] text-gray-400 text-center tracking-widest">點擊確認即代表同意 UNIWAWA 服務條款與取消預約規範</p>
+              <div className="flex justify-center">
+                <CustomCalendar selectedDate={bookingData.date} onDateSelect={(d) => setBookingData({...bookingData, date: d, time: ''})} settings={shopSettings} />
+              </div>
+              {bookingData.date && (
+                <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                  {TIME_SLOTS.map(t => (
+                    <button key={t} disabled={isTimeSlotFull(bookingData.date, t)} onClick={() => setBookingData({...bookingData, time:t})} className={`py-2 text-[10px] border ${bookingData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white disabled:opacity-20'}`}>{t}</button>
+                  ))}
                 </div>
-              </div>
+              )}
+              <button disabled={isSubmitting || !bookingData.time} onClick={handleConfirmBooking} className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase">{isSubmitting ? '處理中...' : '確認送出預約'}</button>
             </div>
           </div>
         ) : bookingStep === 'success' ? (
           <div className="max-w-md mx-auto py-20 px-6 text-center">
             <CheckCircle size={56} className="text-[#C29591] mx-auto mb-4" />
-            <h2 className="text-2xl font-light tracking-[0.3em] mb-4">預約已送出</h2>
-            <p className="text-xs text-gray-400 mb-10 tracking-widest uppercase">Thank you for your reservation</p>
-            <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-4">
-               {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-48 object-cover mb-6" alt="success" />}
-               <div className="space-y-2 border-t pt-4">
-                  <p className="text-sm font-bold text-[#463E3E]">{bookingData.date} {bookingData.time}</p>
-                  <p className="text-xs text-gray-500">{bookingData.name} 閣下，我們已收到您的預約。</p>
-               </div>
-               <button onClick={() => {setBookingStep('none'); setActiveTab('home');}} className="w-full mt-6 bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase">回到首頁</button>
+            <h2 className="text-2xl font-light tracking-[0.3em] mb-10">預約成功</h2>
+            <div className="bg-white border p-8 shadow-sm">
+               {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-48 object-cover mb-4" alt="success" />}
+               <p className="text-sm">{bookingData.date} {bookingData.time}</p>
+               <button onClick={() => {setBookingStep('none'); setActiveTab('home');}} className="w-full mt-6 bg-[#463E3E] text-white py-4 text-xs">回到首頁</button>
             </div>
           </div>
         ) : activeTab === 'home' ? (
@@ -343,7 +353,7 @@ export default function App() {
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Beyond<br/>Expectation</h2>
-            <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light hover:bg-[#C29591] transition-colors">點此預約</button>
+            <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
@@ -353,11 +363,11 @@ export default function App() {
                ))}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
-              {cloudItems.filter(i => styleFilter === '全部' || i.category === styleFilter).map(item => (
+              {filteredItems.map(item => (
                 <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
                   onEdit={(i) => {setEditingItem(i); setFormData(i); setIsUploadModalOpen(true);}}
                   onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
-                  onBook={(i) => { setSelectedItem(i); setBookingStep('form'); window.scrollTo(0,0); }}
+                  onBook={(i) => { setSelectedItem(i); setSelectedAddon(null); setBookingStep('form'); window.scrollTo(0,0); }}
                   addons={addons} setSelectedAddon={setSelectedAddon}
                 />
               ))}
@@ -368,7 +378,7 @@ export default function App() {
 
       {/* 管理者登入 */}
       {isAdminModalOpen && (
-        <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4">
           <div className="bg-white p-10 max-w-sm w-full shadow-2xl">
             <h3 className="tracking-[0.5em] mb-10 font-light text-gray-400 text-sm uppercase text-center">Admin Access</h3>
             <form onSubmit={(e) => { e.preventDefault(); if(passwordInput==="8888") setIsLoggedIn(true); setIsAdminModalOpen(false); }}>
@@ -379,7 +389,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 管理彈窗 */}
+      {/* 管理彈窗：包含人員與【加購品設定】 */}
       {isBookingManagerOpen && (
         <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-5xl h-[85vh] shadow-2xl flex flex-col overflow-hidden rounded-sm">
@@ -389,62 +399,137 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
+              
+              {/* --- 1. 加購品管理區塊 (新增的功能) --- */}
               <section className="space-y-6">
                 <div className="border-l-4 border-[#C29591] pl-4">
                   <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品設定 (指甲現況)</h4>
+                  <p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「延甲」等額外服務的金額與所需時間，顧客預約時可選。</p>
                 </div>
-                <form onSubmit={async (e) => {
-                  e.preventDefault();
-                  if(!addonForm.name || !addonForm.price) return;
-                  await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), { ...addonForm, price: Number(addonForm.price), duration: Number(addonForm.duration || 0), createdAt: serverTimestamp() });
-                  setAddonForm({ name: '', price: '', duration: '' });
-                }} className="bg-[#FAF9F6] p-5 border border-[#EAE7E2] grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <input type="text" className="border p-2 text-xs outline-none" placeholder="項目名稱" value={addonForm.name} onChange={e => setAddonForm({...addonForm, name: e.target.value})} />
-                  <input type="number" className="border p-2 text-xs outline-none" placeholder="NT$" value={addonForm.price} onChange={e => setAddonForm({...addonForm, price: e.target.value})} />
-                  <input type="number" className="border p-2 text-xs outline-none" placeholder="分鐘" value={addonForm.duration} onChange={e => setAddonForm({...addonForm, duration: e.target.value})} />
-                  <button className="bg-[#463E3E] text-white py-2.5 text-[10px] tracking-widest uppercase">新增項目</button>
+
+                {/* 新增加購品表單 */}
+                <form onSubmit={handleAddAddon} className="bg-[#FAF9F6] p-5 border border-[#EAE7E2] grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">名稱 (如：現場卸甲)</label>
+                    <input type="text" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="項目名稱" value={addonForm.name} onChange={e => setAddonForm({...addonForm, name: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">加價金額 (NT$)</label>
+                    <input type="number" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="0" value={addonForm.price} onChange={e => setAddonForm({...addonForm, price: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">所需時間 (分鐘)</label>
+                    <input type="number" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="0" value={addonForm.duration} onChange={e => setAddonForm({...addonForm, duration: e.target.value})} />
+                  </div>
+                  <button className="bg-[#463E3E] text-white py-2.5 text-[10px] tracking-widest uppercase hover:bg-[#C29591] transition-colors">新增項目</button>
                 </form>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* 現有加購品列表 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {addons.map(addon => (
-                    <div key={addon.id} className="border p-4 flex justify-between items-center bg-white shadow-sm">
-                      <div className="text-xs">
-                        <div className="font-bold">{addon.name}</div>
-                        <div className="text-gray-400">+ NT$ {addon.price} / {addon.duration} min</div>
+                    <div key={addon.id} className="border border-[#EAE7E2] p-4 flex justify-between items-center bg-white shadow-sm hover:border-[#C29591] transition-colors">
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-[#463E3E]">{addon.name}</div>
+                        <div className="text-[10px] text-gray-400">+ NT$ {addon.price} / + {addon.duration} 分鐘</div>
                       </div>
-                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', addon.id))}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
+                      <button onClick={() => { if(confirm('確定刪除此加購項？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', addon.id)); }}>
+                        <Trash2 size={14} className="text-gray-300 hover:text-red-500 transition-colors"/>
+                      </button>
+                    </div>
+                  ))}
+                  {addons.length === 0 && <p className="text-[10px] text-gray-300 col-span-full text-center py-4">目前沒有設定任何加購項目</p>}
+                </div>
+              </section>
+
+              {/* --- 2. 人員管理區塊 --- */}
+              <section className="space-y-6 pt-6 border-t border-dashed">
+                <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
+                  <div>
+                    <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">人員名單與請假</h4>
+                    <p className="text-[10px] text-gray-400 mt-1">設定美甲師名稱，系統會根據剩餘上班人數決定預約上限</p>
+                  </div>
+                  <button onClick={() => {
+                    const name = prompt("請輸入美甲師姓名：");
+                    if(name) saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, leaveDates: [] }] });
+                  }} className="text-[10px] bg-[#C29591] text-white px-4 py-2 rounded-full hover:bg-[#463E3E] transition-colors">+ 新增人員</button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(shopSettings.staff || []).map(staff => (
+                    <div key={staff.id} className="bg-[#FAF9F6] border border-[#EAE7E2] p-5 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold flex items-center gap-2"><Users size={14} className="text-[#C29591]"/> {staff.name}</span>
+                        <button onClick={() => {
+                          if(confirm(`確定刪除 ${staff.name}？`)) saveShopSettings({ ...shopSettings, staff: shopSettings.staff.filter(s => s.id !== staff.id) });
+                        }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
+                      </div>
+                      <div className="space-y-2 border-t pt-4">
+                        <label className="text-[10px] font-bold text-gray-400 flex items-center gap-1"><UserMinus size={12}/> 設定請假</label>
+                        <input type="date" className="text-[10px] border p-2 w-full outline-none focus:border-[#C29591]" onChange={(e) => {
+                          if(!e.target.value) return;
+                          const updatedStaff = shopSettings.staff.map(s => {
+                            if(s.id === staff.id) {
+                              const currentLeaves = s.leaveDates || [];
+                              return { ...s, leaveDates: currentLeaves.includes(e.target.value) ? currentLeaves : [...currentLeaves, e.target.value].sort() };
+                            }
+                            return s;
+                          });
+                          saveShopSettings({ ...shopSettings, staff: updatedStaff });
+                        }} />
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {(staff.leaveDates || []).map(d => (
+                            <span key={d} className="text-[9px] bg-red-50 text-red-500 px-2 py-1 flex items-center gap-1 rounded-sm border border-red-100">
+                              {d} <X size={10} className="cursor-pointer" onClick={() => {
+                                const updatedStaff = shopSettings.staff.map(s => {
+                                  if(s.id === staff.id) return { ...s, leaveDates: s.leaveDates.filter(ld => ld !== d) };
+                                  return s;
+                                });
+                                saveShopSettings({ ...shopSettings, staff: updatedStaff });
+                              }}/>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               </section>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 border-t pt-12">
+              {/* --- 3. 全店公休與預約清單 --- */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 border-t border-dashed pt-6">
                 <section className="space-y-6">
-                   <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">全店公休日</h4>
-                   <div className="flex gap-2">
-                     <input type="date" className="flex-1 p-2 border text-xs" value={newHolidayInput} onChange={e => setNewHolidayInput(e.target.value)} />
-                     <button onClick={() => { if(!newHolidayInput) return; setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), {...shopSettings, specificHolidays: [...(shopSettings.specificHolidays || []), newHolidayInput].sort()}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px]">新增</button>
-                   </div>
-                   <div className="flex flex-wrap gap-2">
-                     {(shopSettings.specificHolidays || []).map(date => (
-                       <span key={date} className="text-[10px] bg-gray-100 px-3 py-1.5 border flex items-center gap-2">
-                         {date} <X size={12} className="cursor-pointer" onClick={() => setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), {...shopSettings, specificHolidays: shopSettings.specificHolidays.filter(d => d !== date)})} />
-                       </span>
-                     ))}
-                   </div>
+                    <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">全店公休日設定</h4>
+                    <div className="flex gap-2">
+                      <input type="date" className="flex-1 p-2 border text-xs outline-none focus:border-[#C29591]" value={newHolidayInput} onChange={e => setNewHolidayInput(e.target.value)} />
+                      <button onClick={() => { if(!newHolidayInput) return; saveShopSettings({...shopSettings, specificHolidays: [...(shopSettings.specificHolidays || []), newHolidayInput].sort()}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px] hover:bg-[#C29591] transition-colors">新增</button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                      {(shopSettings.specificHolidays || []).map(date => (
+                        <span key={date} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex items-center gap-2">
+                          {date} <X size={12} className="cursor-pointer" onClick={() => saveShopSettings({...shopSettings, specificHolidays: shopSettings.specificHolidays.filter(d => d !== date)})} />
+                        </span>
+                      ))}
+                    </div>
                 </section>
+
                 <section className="space-y-6">
-                  <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">預約訂單列表</h4>
-                  <div className="space-y-3">
+                  <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">現有預約</h4>
+                  <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2">
                     {allBookings.map(b => (
-                      <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6] text-[11px]">
+                      <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6] text-[11px] hover:border-[#C29591] transition-colors">
                         <div>
                           <div className="font-bold text-sm">{b.date} {b.time}</div>
                           <div>{b.name} • {b.phone}</div>
-                          <div className="text-[#C29591]">{b.itemTitle} + {b.addonName} (NT${b.totalAmount})</div>
+                          <div className="text-[#C29591] mt-1">
+                            {b.itemTitle} 
+                            {b.addonName && b.addonName !== '無' ? <span className="text-[#463E3E]"> + {b.addonName}</span> : ''}
+                          </div>
+                          <div className="text-gray-400 mt-0.5">總額: NT${b.totalAmount}</div>
                         </div>
-                        <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id))} className="text-gray-300 hover:text-red-500"><Trash2 size={18}/></button>
+                        <button onClick={() => { if(confirm('確定取消此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)); }} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
                       </div>
                     ))}
+                    {allBookings.length === 0 && <p className="text-center text-gray-300 text-xs py-4">目前沒有預約</p>}
                   </div>
                 </section>
               </div>
@@ -467,14 +552,20 @@ export default function App() {
                 <input type="number" required className="w-1/2 border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="價格" />
                 <input type="number" required className="w-1/2 border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="分鐘" />
               </div>
+              <div className="space-y-2">
+                 <label className="text-xs text-gray-400">風格分類</label>
+                 <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-b py-2 outline-none bg-white">
+                   {STYLE_CATEGORIES.filter(c => c!=='全部').map(c => <option key={c} value={c}>{c}</option>)}
+                 </select>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {formData.images.map((img, i) => (
                   <div key={i} className="relative w-20 h-20 border">
-                    <img src={img} className="w-full h-full object-cover" alt="preview" />
+                    <img src={img} className="w-full h-full object-cover" alt="upload-preview" />
                     <button type="button" onClick={() => setFormData({...formData, images: formData.images.filter((_, idx) => idx !== i)})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
                   </div>
                 ))}
-                <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer">
+                <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-[#C29591] text-gray-400 hover:text-[#C29591] transition-colors">
                   <Upload size={16} /><input type="file" hidden accept="image/*" multiple onChange={(e) => {
                     Array.from(e.target.files).forEach(file => {
                       const reader = new FileReader();
@@ -484,7 +575,7 @@ export default function App() {
                   }} />
                 </label>
               </div>
-              <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase">{isUploading ? '處理中...' : '確認發布'}</button>
+              <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase hover:bg-[#C29591] transition-colors">{isUploading ? '處理中...' : '確認發布'}</button>
             </form>
           </div>
         </div>
