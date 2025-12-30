@@ -20,6 +20,7 @@ const appId = 'uniwawa01';
 // --- 常數設定 ---
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+const CLEANING_TIME = 20; // 修改：定義清潔時間為 20 分鐘
 
 // 時間範圍 12:00 - 19:00
 const generateTimeSlots = () => {
@@ -129,7 +130,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // 將時間歸零，只比較日期
+  today.setHours(0, 0, 0, 0);
 
   const renderDays = () => {
     const days = [];
@@ -141,8 +142,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
       
-      // 修改處：將「小於今天」改成「小於等於今天」，達成當日不可預約
-      const isPastOrToday = new Date(currentYear, currentMonth, d) <= today; 
+      const isPastOrToday = new Date(currentYear, currentMonth, d) <= today;
       
       const isDisabled = isShopHoliday || isAllOnLeave || isPastOrToday;
       const isSelected = selectedDate === dateStr;
@@ -225,23 +225,32 @@ export default function App() {
 
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
-  // --- 判斷特定時間點是否已滿 ---
+  // --- 判斷特定時間點是否已滿 (含清潔時間) ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
     
-    // 1. 計算當日可用人力
+    // 1. 檢查是否為過去時間 (今日)
+    const todayStr = getTodayString();
+    if (date === todayStr) {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const checkMinutes = timeToMinutes(checkTimeStr);
+      if (checkMinutes <= currentMinutes) return true;
+    }
+    
+    // 2. 計算當日可用人力
     const staffList = shopSettings.staff || [];
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
     const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 1;
 
-    // 2. 預約重疊檢測 (交集法)
+    // 3. 預約重疊檢測 (交集法 + 清潔時間)
     const startA = timeToMinutes(checkTimeStr);
-    const endA = startA + calcTotalDuration() + 20; // +20分緩衝
+    const endA = startA + calcTotalDuration() + CLEANING_TIME; // 加入清潔時間
 
     const concurrentBookings = allBookings.filter(b => {
       if (b.date !== date) return false;
       const startB = timeToMinutes(b.time);
-      const endB = startB + (Number(b.totalDuration) || 90) + 20;
+      const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME; // 現有預約也加入清潔時間
       return (startA < endB) && (startB < endA);
     });
 
@@ -256,7 +265,6 @@ export default function App() {
   // --- Effect: 當進入預約表單時，自動選取第一個可用時間 ---
   useEffect(() => {
     if (bookingStep === 'form' && bookingData.date) {
-        // 只有當尚未選時間，或目前選的時間變成無效時，才重新自動選
         if (!bookingData.time || isTimeSlotFull(bookingData.date, bookingData.time)) {
             const firstTime = findFirstAvailableTime(bookingData.date);
             if (firstTime) {
@@ -411,7 +419,6 @@ export default function App() {
               <div className="flex justify-center pt-2">
                 <CustomCalendar selectedDate={bookingData.date} 
                   onDateSelect={(d) => {
-                    // 切換日期時，先清空時間，然後透過 useEffect 自動選取新日期的第一個空位
                     setBookingData({...bookingData, date: d, time: ''}); 
                   }} 
                   settings={shopSettings} />
