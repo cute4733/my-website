@@ -21,11 +21,12 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
+// --- 修改：時間生成範圍更改為 12:00 - 19:00 ---
 const generateTimeSlots = () => {
   const slots = [];
-  for (let h = 12; h <= 20; h++) {
+  for (let h = 12; h <= 19; h++) { // 修改：結束時間改為 19
     for (let m = 0; m < 60; m += 10) {
-      if (h === 20 && m > 0) break;
+      if (h === 19 && m > 0) break; // 嚴格限制：19:00 為最後一格，不產生 19:10
       slots.push(`${h}:${m === 0 ? '00' : m}`);
     }
   }
@@ -40,7 +41,6 @@ const timeToMinutes = (timeStr) => {
 };
 
 // --- 子組件：款式卡片 ---
-// 修改：移除傳入 setSelectedAddon，改為內部管理選擇，點擊預約時才回傳
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [localAddonId, setLocalAddonId] = useState(''); // 卡片內部的選擇狀態
@@ -56,7 +56,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
     setCurrentIdx((prev) => (prev - 1 + images.length) % images.length);
   };
 
-  // 處理按鈕點擊：將款式與選中的加購品一起回傳給 App
   const handleBookingClick = () => {
     const selectedAddonObj = addons.find(a => a.id === localAddonId) || null;
     onBook(item, selectedAddonObj);
@@ -178,7 +177,7 @@ export default function App() {
 
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedAddon, setSelectedAddon] = useState(null); // 全域選中的加購品
+  const [selectedAddon, setSelectedAddon] = useState(null);
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -207,24 +206,49 @@ export default function App() {
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), (s) => 
       setAddons(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
-    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), orderBy('createdAt', 'desc')), (s) => 
+    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), (s) => 
       setAllBookings(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
   }, [user]);
 
+  // 計算目前選擇的總時長 (用於碰撞檢測)
+  const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
+
+  // --- 修改：優化的時間衝突檢測 ---
+  // 解決 12:00 可無限點擊的問題，並加入前後時段碰撞檢測
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
+    
+    // 1. 計算當日可用人力
     const staffList = shopSettings.staff || [];
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
     const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 1;
-    const checkMin = timeToMinutes(checkTimeStr);
-    const concurrent = allBookings.filter(b => {
-      if (b.date !== date) return false;
-      const start = timeToMinutes(b.time);
-      const end = start + (Number(b.totalDuration) || 90) + 20;
-      return checkMin >= start && checkMin < end;
+
+    // 2. 準備當前檢查的時間區間 (嘗試預約的時間段)
+    const checkStart = timeToMinutes(checkTimeStr);
+    const newBookingDuration = calcTotalDuration(); // 取得當前使用者想預約的總時長
+    const checkEnd = checkStart + newBookingDuration + 20; // 包含 20 分鐘緩衝
+
+    // 3. 計算衝突的預約數量
+    const concurrentBookings = allBookings.filter(b => {
+      if (b.date !== date) return false; // 日期不同，不衝突
+
+      const existingStart = timeToMinutes(b.time);
+      const existingDuration = (Number(b.totalDuration) || 90);
+      const existingEnd = existingStart + existingDuration + 20; // 現有預約的結束時間 (含緩衝)
+
+      // 判斷是否重疊 (任一條件符合即視為重疊)
+      // A. 現有預約包含了檢查點 (傳統邏輯：此點已被佔)
+      const isOccupiedByExisting = (checkStart >= existingStart && checkStart < existingEnd);
+      
+      // B. 新預約的結束時間會撞到現有預約 (前瞻邏輯：我從 12:00 開始做，會不會撞到 13:00 的預約？)
+      const willClashWithExisting = (checkStart < existingStart && checkEnd > existingStart);
+
+      return isOccupiedByExisting || willClashWithExisting;
     });
-    return concurrent.length >= availableStaffCount;
+
+    // 4. 若衝突數量 >= 可用人數，則滿額
+    return concurrentBookings.length >= availableStaffCount;
   };
 
   const saveShopSettings = async (newSettings) => {
@@ -285,9 +309,7 @@ export default function App() {
     return matchStyle && matchPrice;
   });
 
-  // 計算邏輯：確保使用選中的 Addon 進行計算
   const calcTotalAmount = () => (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
-  const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
   // 驗證邏輯
   const isNameInvalid = /\d/.test(bookingData.name);
@@ -489,7 +511,6 @@ export default function App() {
                 <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
                   onEdit={(i) => {setEditingItem(i); setFormData(i); setIsUploadModalOpen(true);}}
                   onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
-                  // 修正：將加購品物件一併傳遞給 App
                   onBook={(i, addon) => { 
                     setSelectedItem(i); 
                     setSelectedAddon(addon); // 確保狀態被設定
