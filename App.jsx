@@ -4,7 +4,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
 
-// --- Firebase 配置 (請保持您原本的設定) ---
+// --- Firebase 配置 ---
 const firebaseConfig = {
   apiKey: "AIzaSyBkFqTUwtC7MqZ6h4--2_1BmldXEg-Haiw",
   authDomain: "uniwawa-beauty.firebaseapp.com",
@@ -21,10 +21,10 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const DEFAULT_CLEANING_TIME = 20;
-const MAX_BOOKING_DAYS = 30;
+const DEFAULT_CLEANING_TIME = 20; // 預設整備時間
+const MAX_BOOKING_DAYS = 30; // 最大可預約天數
 
-// 產生 12:00 - 19:00 的時段
+// 產生 12:00 - 19:00 的時段 (每10分鐘)
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 19; h++) {
@@ -52,8 +52,7 @@ const getTodayString = () => {
 };
 
 // --- 核心演算法：檢查特定時段是否可用 ---
-// 這是一個純函數，不依賴組件 state，確保計算準確
-// 邏輯修正：佔用時間 = 服務時間 + 整備時間
+// 這是最重要的邏輯修正：佔用時間 = 服務時間 + 整備時間
 const checkSlotAvailability = (params) => {
   const { 
     targetDate, 
@@ -68,13 +67,14 @@ const checkSlotAvailability = (params) => {
 
   if (!targetDate || !targetTime || !storeId) return false;
 
-  // 1. 檢查是否為過去時間
+  // 1. 檢查是否為過去時間 (簡單日期比較)
   const todayStr = getTodayString();
   if (targetDate < todayStr) return false;
+  
+  // 若為當天，需檢查是否已過時間 (保留30分鐘緩衝)
   if (targetDate === todayStr) {
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    // 如果是當天，必須比現在時間晚至少 30 分鐘才能預約
     if (timeToMinutes(targetTime) < currentMinutes + 30) return false; 
   }
 
@@ -88,21 +88,24 @@ const checkSlotAvailability = (params) => {
   const onLeaveCount = storeStaff.filter(s => (s.leaveDates || []).includes(targetDate)).length;
   const totalAvailableStaff = storeStaff.length - onLeaveCount;
 
-  if (totalAvailableStaff <= 0) return false; // 無人上班
+  if (totalAvailableStaff <= 0) return false; // 當天無人上班
 
   // 4. 計算「新預約」的時間區間 [start, end]
-  // 核心修正：結束時間必須包含整備時間
+  // 修正邏輯：必須加上整備時間
   const newStart = timeToMinutes(targetTime);
   const newEnd = newStart + serviceDuration + cleaningTime;
 
   // 5. 計算「現有訂單」的重疊數量
   const concurrentBookings = allBookings.filter(b => {
+    // 排除不同天或不同店
     if (b.date !== targetDate) return false;
     if (String(b.storeId) !== String(storeId)) return false;
 
     const existingStart = timeToMinutes(b.time);
     const existingDuration = Number(b.totalDuration) || 90; 
-    // 核心修正：舊訂單也要加上整備時間才算釋出資源
+    
+    // 修正邏輯：現有訂單的結束時間也必須包含整備時間
+    // 這樣才能確保前一位客人做完+收拾完，下一位才能開始
     const existingEnd = existingStart + existingDuration + cleaningTime;
 
     // 判斷重疊公式：(StartA < EndB) && (StartB < EndA)
@@ -127,8 +130,8 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
     <div className="group flex flex-col bg-white border border-[#F0EDEA] shadow-sm relative">
       {isLoggedIn && (
         <div className="absolute top-4 right-4 flex gap-2 z-[30]">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-2 bg-white/90 rounded-full text-blue-600 shadow-sm hover:scale-110"><Edit3 size={16}/></button>
-          <button onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:scale-110"><Trash2 size={16}/></button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-2 bg-white/90 rounded-full text-blue-600 shadow-sm hover:scale-110 transition-transform"><Edit3 size={16}/></button>
+          <button onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
         </div>
       )}
       <div className="aspect-[3/4] overflow-hidden relative bg-gray-50">
@@ -149,12 +152,27 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
         <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 uppercase tracking-widest font-light"><Clock size={14} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         
-        <select className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E] ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} onChange={(e) => setLocalAddonId(e.target.value)} value={localAddonId}>
+        <select 
+          className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E] transition-colors ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
+          onChange={(e) => setLocalAddonId(e.target.value)}
+          value={localAddonId}
+        >
           <option value="">請選擇指甲現況 (必選)</option>
-          {addons.map(a => <option key={a.id} value={a.id}>{a.name} (+${a.price} / +{a.duration}分)</option>)}
+          {addons.map(a => (
+            <option key={a.id} value={a.id}>
+              {a.name} (+${a.price} / +{a.duration}分)
+            </option>
+          ))}
         </select>
 
-        <button disabled={!localAddonId} onClick={() => onBook(item, addons.find(a => a.id === localAddonId) || null)} className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors disabled:opacity-50 disabled:bg-gray-300">
+        <button 
+          disabled={!localAddonId} 
+          onClick={() => {
+            const selectedAddonObj = addons.find(a => a.id === localAddonId) || null;
+            onBook(item, selectedAddonObj);
+          }} 
+          className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
           {!localAddonId ? '請先選擇現況' : '點此預約'}
         </button>
       </div>
@@ -166,7 +184,9 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
 const CustomCalendar = ({ selectedDate, onDateSelect, isDateFullFunc }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
-  useEffect(() => { if (selectedDate) setViewDate(new Date(selectedDate)); }, [selectedDate]);
+  useEffect(() => {
+    if (selectedDate) setViewDate(new Date(selectedDate));
+  }, [selectedDate]);
 
   const currentMonth = viewDate.getMonth();
   const currentYear = viewDate.getFullYear();
@@ -184,13 +204,16 @@ const CustomCalendar = ({ selectedDate, onDateSelect, isDateFullFunc }) => {
       
       const isPast = targetDate < today;
       const isTooFar = targetDate > maxDate;
+      // 使用傳入的函數判斷該日是否已滿
       const isFullOrHoliday = isDateFullFunc ? isDateFullFunc(dateStr) : false;
+      
       const isDisabled = isPast || isTooFar || isFullOrHoliday;
       const isSelected = selectedDate === dateStr;
 
       days.push(
         <button key={d} disabled={isDisabled} onClick={() => onDateSelect(dateStr)}
-          className={`w-full aspect-square text-sm rounded-full flex items-center justify-center transition-all ${isDisabled ? 'text-gray-300 line-through cursor-not-allowed' : isSelected ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>
+          className={`w-full aspect-square text-sm rounded-full flex items-center justify-center transition-all 
+          ${isDisabled ? 'text-gray-300 line-through cursor-not-allowed' : isSelected ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>
           {d}
         </button>
       );
@@ -207,8 +230,11 @@ const CustomCalendar = ({ selectedDate, onDateSelect, isDateFullFunc }) => {
           <button onClick={() => setViewDate(new Date(currentYear, currentMonth + 1, 1))}><ChevronRight size={18}/></button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-2 mb-2">{WEEKDAYS.map(w => <div key={w} className="w-full aspect-square flex items-center justify-center text-xs text-gray-400 font-bold">{w}</div>)}</div>
+      <div className="grid grid-cols-7 gap-2 mb-2">
+        {WEEKDAYS.map(w => <div key={w} className="w-full aspect-square flex items-center justify-center text-xs text-gray-400 font-bold">{w}</div>)}
+      </div>
       <div className="grid grid-cols-7 gap-2">{renderDays()}</div>
+      <div className="text-[10px] text-center text-gray-400 mt-4 tracking-widest">僅開放 {MAX_BOOKING_DAYS} 天內預約</div>
     </div>
   );
 };
@@ -228,9 +254,13 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const hasBooking = bookings.some(b => b.date === dateStr);
       const isSelected = selectedDate === dateStr;
+
       days.push(
-        <button key={d} onClick={() => onDateSelect(dateStr)} className={`w-full aspect-square text-xs rounded-lg flex flex-col items-center justify-center gap-1 border ${isSelected ? 'border-[#C29591] bg-[#FAF9F6] text-[#C29591] font-bold' : 'border-transparent hover:bg-gray-50'}`}>
-          <span>{d}</span>{hasBooking && <span className="w-1.5 h-1.5 rounded-full bg-[#C29591]"></span>}
+        <button key={d} onClick={() => onDateSelect(dateStr)}
+          className={`w-full aspect-square text-xs rounded-lg flex flex-col items-center justify-center gap-1 transition-all border
+          ${isSelected ? 'border-[#C29591] bg-[#FAF9F6] text-[#C29591] font-bold' : 'border-transparent hover:bg-gray-50'}`}>
+          <span>{d}</span>
+          {hasBooking && <span className="w-1.5 h-1.5 rounded-full bg-[#C29591]"></span>}
         </button>
       );
     }
@@ -246,7 +276,9 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
           <button onClick={() => setViewDate(new Date(currentYear, currentMonth + 1, 1))}><ChevronRight size={18}/></button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 mb-2">{WEEKDAYS.map(w => <div key={w} className="h-10 flex items-center justify-center text-[10px] text-gray-400 font-bold">{w}</div>)}</div>
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {WEEKDAYS.map(w => <div key={w} className="h-10 flex items-center justify-center text-[10px] text-gray-400 font-bold">{w}</div>)}
+      </div>
       <div className="grid grid-cols-7 gap-1">{renderDays()}</div>
     </div>
   );
@@ -292,21 +324,35 @@ export default function App() {
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
 
   // --- 初始化 ---
-  useEffect(() => { signInAnonymously(auth); onAuthStateChanged(auth, u => setUser(u)); }, []);
+  useEffect(() => {
+    signInAnonymously(auth);
+    onAuthStateChanged(auth, u => setUser(u));
+  }, []);
 
   useEffect(() => {
     if (!user) return;
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings'), (d) => {
-      if (d.exists()) setShopSettings({ stores: d.data().stores || [], staff: d.data().staff || [], holidays: d.data().holidays || [] });
+      if (d.exists()) {
+        const data = d.data();
+        setShopSettings({
+          stores: data.stores || [],
+          staff: data.staff || [],
+          holidays: data.holidays || []
+        });
+      }
     });
     const unsubItems = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), (s) => setCloudItems(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubAddons = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), (s) => setAddons(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubBookings = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), orderBy('createdAt', 'desc')), (s) => setAllBookings(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+
     return () => { unsubSettings(); unsubItems(); unsubAddons(); unsubBookings(); };
   }, [user]);
 
-  // --- 計算屬性 ---
-  const currentServiceDuration = useMemo(() => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0), [selectedItem, selectedAddon]);
+  // --- 計算屬性 (Memo) ---
+  const currentServiceDuration = useMemo(() => {
+    return (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
+  }, [selectedItem, selectedAddon]);
+
   const currentStoreCleaningTime = useMemo(() => {
     const s = shopSettings.stores.find(i => String(i.id) === String(bookingData.storeId));
     return Number(s?.cleaningTime) || DEFAULT_CLEANING_TIME;
@@ -315,11 +361,17 @@ export default function App() {
   // --- 判斷某日是否全滿 (用於月曆顯示) ---
   const isDateFull = (dateStr) => {
     if (!bookingData.storeId) return true;
+    // 只要當天有一個時段可用，就不算全滿
     return !TIME_SLOTS.some(time => 
       checkSlotAvailability({
-        targetDate: dateStr, targetTime: time, storeId: bookingData.storeId,
-        serviceDuration: currentServiceDuration, cleaningTime: currentStoreCleaningTime,
-        staffList: shopSettings.staff, allBookings: allBookings, holidays: shopSettings.holidays
+        targetDate: dateStr,
+        targetTime: time,
+        storeId: bookingData.storeId,
+        serviceDuration: currentServiceDuration,
+        cleaningTime: currentStoreCleaningTime,
+        staffList: shopSettings.staff,
+        allBookings: allBookings,
+        holidays: shopSettings.holidays
       })
     );
   };
@@ -327,33 +379,53 @@ export default function App() {
   // --- 判斷特定時段是否可用 (用於時間按鈕) ---
   const isTimeSlotAvailable = (dateStr, timeStr) => {
     return checkSlotAvailability({
-      targetDate: dateStr, targetTime: timeStr, storeId: bookingData.storeId,
-      serviceDuration: currentServiceDuration, cleaningTime: currentStoreCleaningTime,
-      staffList: shopSettings.staff, allBookings: allBookings, holidays: shopSettings.holidays
+      targetDate: dateStr,
+      targetTime: timeStr,
+      storeId: bookingData.storeId,
+      serviceDuration: currentServiceDuration,
+      cleaningTime: currentStoreCleaningTime,
+      staffList: shopSettings.staff,
+      allBookings: allBookings,
+      holidays: shopSettings.holidays
     });
   };
 
-  // --- 【自動跳轉邏輯】 ---
+  // --- 【自動跳轉邏輯】: 當門市改變或進入表單時，自動尋找第一個空位 ---
   useEffect(() => {
+    // 觸發條件：在表單步驟、已選門市、但日期還是空的 (代表剛進入或剛切換)
     if (bookingStep === 'form' && bookingData.storeId && !bookingData.date) {
+      // 確保依賴資料已載入
       if (shopSettings.stores.length === 0) return;
+
       const today = new Date();
       
       // 搜尋未來 30 天
       for (let i = 0; i < MAX_BOOKING_DAYS; i++) {
-        const d = new Date(today); d.setDate(today.getDate() + i);
-        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
 
-        // 逐一檢查該日的每個時段
+        // 在這一天中搜尋所有時段
         for (const timeStr of TIME_SLOTS) {
           const isAvailable = checkSlotAvailability({
-            targetDate: dateStr, targetTime: timeStr, storeId: bookingData.storeId,
-            serviceDuration: currentServiceDuration, cleaningTime: currentStoreCleaningTime,
-            staffList: shopSettings.staff, allBookings: allBookings, holidays: shopSettings.holidays
+            targetDate: dateStr,
+            targetTime: timeStr,
+            storeId: bookingData.storeId,
+            serviceDuration: currentServiceDuration,
+            cleaningTime: currentStoreCleaningTime,
+            staffList: shopSettings.staff,
+            allBookings: allBookings,
+            holidays: shopSettings.holidays
           });
+
           if (isAvailable) {
+            // 找到第一個可用時段，設定 State 並跳出迴圈
             setBookingData(prev => ({ ...prev, date: dateStr, time: timeStr }));
-            return; // 找到第一個就結束
+            return; 
           }
         }
       }
@@ -365,28 +437,111 @@ export default function App() {
     setIsSubmitting(true);
     const finalAmount = (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
     const selectedStore = shopSettings.stores.find(s => s.id === bookingData.storeId);
+
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
-        ...bookingData, storeName: selectedStore ? selectedStore.name : '未指定',
-        itemTitle: selectedItem?.title, addonName: selectedAddon?.name || '無',
-        totalAmount: finalAmount, totalDuration: currentServiceDuration, createdAt: serverTimestamp()
+        ...bookingData,
+        storeName: selectedStore ? selectedStore.name : '未指定',
+        itemTitle: selectedItem?.title,
+        addonName: selectedAddon?.name || '無',
+        totalAmount: finalAmount,
+        totalDuration: currentServiceDuration, // 存入純服務時間 (不含整備，方便後續顯示)
+        createdAt: serverTimestamp()
       });
       setBookingStep('success');
     } catch (e) { alert('預約失敗'); } finally { setIsSubmitting(false); }
   };
 
-  const saveShopSettings = async (newSettings) => await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
-  const handleAddAddon = async (e) => { e.preventDefault(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), { ...addonForm, price: Number(addonForm.price), duration: Number(addonForm.duration||0), createdAt: serverTimestamp() }); setAddonForm({name:'',price:'',duration:''}); };
-  const handleItemSubmit = async (e) => { e.preventDefault(); setIsUploading(true); try { const payload = { ...formData, price: Number(formData.price), duration: Number(formData.duration), updatedAt: serverTimestamp() }; if (editingItem) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', editingItem.id), payload); else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), { ...payload, createdAt: serverTimestamp() }); setIsUploadModalOpen(false); setFormData({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] }); } catch (err) { alert(err.message); } finally { setIsUploading(false); } };
-  const handleSearchBooking = (e) => { e.preventDefault(); const res = allBookings.filter(b => b.name === searchName.trim() && b.phone === searchPhone.trim()).sort((a,b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`)); if(res.length>0) setSearchResult(res[0]); else { alert('查無資料'); setSearchResult(null); } };
+  const saveShopSettings = async (newSettings) => {
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
+  };
+
+  const handleAddAddon = async (e) => {
+    e.preventDefault();
+    if(!addonForm.name || !addonForm.price) return;
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), {
+        ...addonForm,
+        price: Number(addonForm.price),
+        duration: Number(addonForm.duration || 0),
+        createdAt: serverTimestamp()
+      });
+      setAddonForm({ name: '', price: '', duration: '' });
+      alert('加購項目已新增');
+    } catch (err) { alert("新增失敗：" + err.message); }
+  };
+
+  const handleItemSubmit = async (e) => {
+    e.preventDefault();
+    setIsUploading(true);
+    try {
+      const priceVal = Number(formData.price);
+      const durationVal = Number(formData.duration);
+      if (isNaN(priceVal) || isNaN(durationVal)) throw new Error("價格或時間必須為數字");
+
+      const payload = { 
+        ...formData, 
+        price: priceVal, 
+        duration: durationVal, 
+        updatedAt: serverTimestamp() 
+      };
+
+      if (editingItem) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', editingItem.id), payload);
+      else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), { ...payload, createdAt: serverTimestamp() });
+      
+      setIsUploadModalOpen(false);
+      setFormData({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
+      alert("發布成功！");
+    } catch (err) { alert("儲存失敗：" + err.message); } finally { setIsUploading(false); }
+  };
+
+  const handleSearchBooking = (e) => {
+    e.preventDefault();
+    if(!searchName.trim() || !searchPhone.trim()) return;
+    const results = allBookings.filter(b => 
+      b.name === searchName.trim() && b.phone === searchPhone.trim()
+    );
+    results.sort((a,b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`));
+    if (results.length > 0) {
+       setSearchResult(results[0]); 
+    } else {
+       alert('查無預約資料');
+       setSearchResult(null);
+    }
+  };
 
   // 後台數據過濾
-  const storeFilteredBookings = allBookings.filter(b => adminSelectedStore === 'all' || String(b.storeId) === String(adminSelectedStore)).sort((a, b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
-  const dateFilteredBookings = adminSelectedDate ? storeFilteredBookings.filter(b => b.date === adminSelectedDate) : storeFilteredBookings;
+  const storeFilteredBookings = allBookings.filter(b => {
+    if (adminSelectedStore === 'all') return true;
+    return String(b.storeId) === String(adminSelectedStore);
+  }).sort((a, b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
+
+  const dateFilteredBookings = adminSelectedDate 
+    ? storeFilteredBookings.filter(b => b.date === adminSelectedDate)
+    : storeFilteredBookings;
+
   const handleExportCSV = () => {
-    const csvContent = ['日期,時間,門市,姓名,電話,項目,加購,金額,時長,付款'].join(',') + '\n' + storeFilteredBookings.map(b => [b.date,b.time,b.storeName,b.name,b.phone,b.itemTitle,b.addonName,b.totalAmount,b.totalDuration,b.paymentMethod].join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }));
-    const link = document.createElement('a'); link.href = url; link.download = `預約_${getTodayString()}.csv`; link.click();
+    const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長', '付款方式'];
+    const rows = storeFilteredBookings.map(b => [ 
+      b.date,
+      b.time,
+      b.storeName || '未指定',
+      b.name,
+      b.phone,
+      b.itemTitle,
+      b.addonName,
+      b.totalAmount,
+      b.totalDuration,
+      b.paymentMethod || '門市付款'
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `預約清單_${adminSelectedStore === 'all' ? '全部' : '分店'}_${getTodayString()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -395,12 +550,18 @@ export default function App() {
         {/* 手機版置中修正: items-center, justify-center */}
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between transition-all duration-300">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
+          
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center justify-center md:justify-end w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
             {['home', 'notice', 'catalog', 'search', 'store'].map(tab => (
-              <button key={tab} onClick={() => {setActiveTab(tab); setBookingStep('none'); if(tab==='search') setSearchResult(null);}} className={`flex-shrink-0 ${activeTab === tab ? 'text-[#C29591]' : ''}`}>
+              <button 
+                key={tab} 
+                onClick={() => {setActiveTab(tab); setBookingStep('none'); if(tab==='search') setSearchResult(null);}} 
+                className={`flex-shrink-0 ${activeTab === tab ? 'text-[#C29591]' : ''}`}
+              >
                 {tab === 'home' ? '首頁' : tab === 'notice' ? '須知' : tab === 'catalog' ? '款式' : tab === 'search' ? '查詢' : '門市'}
               </button>
             ))}
+            
             {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2] flex-shrink-0">
                 <button onClick={() => {setEditingItem(null); setFormData({title:'', price:'', category:'極簡氣質', duration:'90', images:[]}); setIsUploadModalOpen(true)}} className="text-[#C29591]"><Plus size={18}/></button>
@@ -417,70 +578,134 @@ export default function App() {
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION</h2>
+            {/* 預約資訊摘要 */}
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                   <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">{selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="preview" />}</div>
+                   <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
+                      {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="preview" />}
+                   </div>
                    <div className="flex-1 space-y-1">
                     <p className="text-xs text-[#C29591] tracking-widest uppercase font-bold">預約項目</p>
                     <p className="text-sm font-medium">{selectedItem?.title} {selectedAddon ? `+ ${selectedAddon.name}` : ''}</p>
-                    <p className="text-xs text-gray-400">預計總時長: <span className="font-bold text-[#463E3E]">{currentServiceDuration}</span> 分鐘</p>
+                    <p className="text-xs text-gray-400">
+                        預計總時長: <span className="font-bold text-[#463E3E]">{currentServiceDuration}</span> 分鐘
+                    </p>
                    </div>
-                   <div className="text-right"><p className="text-xs text-gray-400 tracking-widest uppercase">總金額</p><p className="text-lg font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price)||0) + (Number(selectedAddon?.price)||0)).toLocaleString()}</p></div>
+                   <div className="text-right">
+                      <p className="text-xs text-gray-400 tracking-widest uppercase">總金額</p>
+                      <p className="text-lg font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price)||0) + (Number(selectedAddon?.price)||0)).toLocaleString()}</p>
+                   </div>
                 </div>
             </div>
 
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
+              {/* 門市選擇 */}
               <div className="border-b border-[#EAE7E2] pb-6">
                 <label className="block text-xs font-bold text-gray-400 mb-2">選擇預約門市</label>
                 <div className="flex flex-wrap gap-3">
-                  {shopSettings.stores.map(store => (
-                    <button key={store.id} onClick={() => { setBookingData({...bookingData, storeId: store.id, date: '', time: ''}); }} className={`px-4 py-2 text-xs border rounded-full transition-all ${String(bookingData.storeId) === String(store.id) ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{store.name}</button>
-                  ))}
-                  {shopSettings.stores.length===0 && <p className="text-xs text-red-400">無可用門市</p>}
+                  {shopSettings.stores.length > 0 ? shopSettings.stores.map(store => (
+                    <button
+                      key={store.id}
+                      onClick={() => { 
+                        // 切換門市時，清空日期與時間，這會觸發 useEffect 自動跳轉搜尋
+                        setBookingData({...bookingData, storeId: store.id, date: '', time: ''}); 
+                      }}
+                      className={`px-4 py-2 text-xs border rounded-full transition-all ${String(bookingData.storeId) === String(store.id) ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}
+                    >
+                      {store.name}
+                    </button>
+                  )) : (
+                    <p className="text-xs text-red-400">無可用門市</p>
+                  )}
                 </div>
               </div>
 
+              {/* 表單輸入 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <input required type="text" placeholder="顧客姓名 (不可含數字)" className="border-b py-2 outline-none" value={bookingData.name} onChange={e => setBookingData({...bookingData, name: e.target.value})} />
                 <input required type="tel" placeholder="聯絡電話 (10碼數字)" className="border-b py-2 outline-none" value={bookingData.phone} onChange={e => { if(e.target.value.length<=10) setBookingData({...bookingData, phone: e.target.value.replace(/\D/g, '')}); }} />
-                <div className="flex items-center gap-2 border-b border-[#EAE7E2] py-2 text-gray-400 md:col-span-2"><CreditCard size={16}/> <span className="text-xs">付款方式：</span><span className="text-[#463E3E] font-medium text-xs">門市付款</span></div>
+                <div className="flex items-center gap-2 border-b border-[#EAE7E2] py-2 text-gray-400 md:col-span-2">
+                   <CreditCard size={16}/> <span className="text-xs">付款方式：</span><span className="text-[#463E3E] font-medium text-xs">門市付款</span>
+                </div>
               </div>
 
+              {/* 日曆與時間選擇 */}
               {bookingData.storeId && (
                 <>
                   <div className="flex justify-center pt-2">
-                    <CustomCalendar selectedDate={bookingData.date} onDateSelect={(d) => setBookingData({...bookingData, date: d, time: ''})} isDateFullFunc={isDateFull} />
+                    <CustomCalendar 
+                      selectedDate={bookingData.date} 
+                      onDateSelect={(d) => { 
+                        // 手動切換日期時，清空時間，但不觸發自動搜尋 (因為日期已設定)
+                        // 可選：若希望切換日期也自動選第一個，可在此呼叫 findFirstAvailable
+                        setBookingData({...bookingData, date: d, time: ''}); 
+                      }} 
+                      isDateFullFunc={isDateFull}
+                    />
                   </div>
+                  
                   {bookingData.date && (
-                    <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-4 md:grid-cols-6 gap-2 animate-pulse-once">
                       {TIME_SLOTS.map(t => {
                         const available = isTimeSlotAvailable(bookingData.date, t);
-                        return <button key={t} disabled={!available} onClick={() => setBookingData({...bookingData, time:t})} className={`py-2 text-[10px] border transition-colors ${bookingData.time===t ? 'bg-[#463E3E] text-white border-[#463E3E]' : available ? 'bg-white hover:border-[#C29591]' : 'bg-gray-100 text-gray-300 border-transparent cursor-not-allowed'}`}>{t}</button>;
+                        const isSelected = bookingData.time === t;
+                        return (
+                          <button 
+                            key={t} 
+                            disabled={!available} 
+                            onClick={() => setBookingData({...bookingData, time:t})} 
+                            className={`py-2 text-[10px] border transition-colors ${isSelected ? 'bg-[#463E3E] text-white border-[#463E3E]' : available ? 'bg-white hover:border-[#C29591]' : 'bg-gray-100 text-gray-300 border-transparent cursor-not-allowed'}`}
+                          >
+                            {t}
+                          </button>
+                        );
                       })}
                     </div>
                   )}
                 </>
               )}
 
-              <button disabled={isSubmitting || !bookingData.name || !bookingData.phone || !bookingData.time} onClick={handleConfirmBooking} className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50">{isSubmitting ? '處理中...' : '確認預約'}</button>
+              <button 
+                disabled={isSubmitting || !bookingData.name || !bookingData.phone || !bookingData.time} 
+                onClick={handleConfirmBooking} 
+                className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50"
+              >
+                {isSubmitting ? '處理中...' : '確認預約'}
+              </button>
             </div>
           </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
-            <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]"><img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" /></div>
+            <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
+              <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
+            </div>
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : activeTab === 'catalog' ? (
           <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
-                <div className="flex flex-wrap gap-4 justify-center items-center">{STYLE_CATEGORIES.map(c => <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400'}`}>{c}</button>)}</div>
-                <div className="flex flex-wrap gap-4 justify-center items-center">{PRICE_CATEGORIES.map(p => <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400'}`}>{p}</button>)}</div>
+                <div className="flex flex-wrap gap-4 justify-center items-center">
+                   {STYLE_CATEGORIES.map(c => (
+                     <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400'}`}>{c}</button>
+                   ))}
+                </div>
+                <div className="flex flex-wrap gap-4 justify-center items-center">
+                   {PRICE_CATEGORIES.map(p => (
+                     <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400'}`}>{p}</button>
+                   ))}
+                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
               {cloudItems.filter(i => (styleFilter==='全部'||i.category===styleFilter) && (priceFilter==='全部'||(priceFilter==='1300以下'?i.price<1300:priceFilter==='1900以上'?i.price>1900:i.price>=1300&&i.price<=1900))).map(item => (
-                <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn} onEdit={(i)=>{setEditingItem(i);setFormData(i);setIsUploadModalOpen(true)}} onDelete={(id)=>deleteDoc(doc(db,'artifacts',appId,'public','data','nail_designs',id))} onBook={(i,a)=>{setSelectedItem(i);setSelectedAddon(a);setBookingStep('form');window.scrollTo(0,0)}} addons={addons}/>
+                <StyleCard 
+                  key={item.id} item={item} isLoggedIn={isLoggedIn} 
+                  onEdit={(i)=>{setEditingItem(i);setFormData(i);setIsUploadModalOpen(true)}} 
+                  onDelete={(id)=>deleteDoc(doc(db,'artifacts',appId,'public','data','nail_designs',id))} 
+                  onBook={(i,a)=>{setSelectedItem(i);setSelectedAddon(a);setBookingStep('form');window.scrollTo(0,0)}} 
+                  addons={addons}
+                />
               ))}
             </div>
           </div>
@@ -505,6 +730,7 @@ export default function App() {
         )}
       </main>
 
+      {/* 管理者登入與彈窗 (保持原樣，僅變數串接) */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4">
           <div className="bg-white p-10 max-w-sm w-full shadow-2xl">
