@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Tag } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, Calendar as CalendarIcon, Users, UserMinus, ChevronLeft, ChevronRight, CheckCircle, Upload } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -17,7 +17,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'uniwawa01';
 
-// --- 常數設定 ---
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const TIME_SLOTS = (() => {
@@ -45,7 +44,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setHours(0,0,0,0);
 
   const renderDays = () => {
     const days = [];
@@ -55,7 +54,8 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const isShopHoliday = (settings?.specificHolidays || []).includes(dateStr);
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
-      const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
+      const availableCount = staffList.length === 0 ? 1 : (staffList.length - onLeaveCount);
+      const isAllOnLeave = availableCount <= 0;
       const isPast = new Date(currentYear, currentMonth, d) < today;
       const isDisabled = isShopHoliday || isAllOnLeave || isPast;
       const isSelected = selectedDate === dateStr;
@@ -101,14 +101,13 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '' });
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isBookingManagerOpen, setIsBookingManagerOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [styleFilter, setStyleFilter] = useState('全部');
-  const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
+  const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣氣', duration: '90', images: [] });
 
   useEffect(() => {
     signInAnonymously(auth);
@@ -136,20 +135,19 @@ export default function App() {
     const staffList = shopSettings.staff || [];
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
     const availableStaff = staffList.length > 0 ? (staffList.length - onLeaveCount) : 1;
-
     const checkMin = timeToMinutes(checkTimeStr);
     const concurrent = allBookings.filter(b => {
       if (b.date !== date) return false;
       const start = timeToMinutes(b.time);
-      const end = start + (Number(b.totalDuration) || 90) + 10;
-      return checkMin >= start && checkMin < end;
+      const totalDur = Number(b.totalDuration) || 90;
+      return checkMin >= start && checkMin < (start + totalDur + 10);
     });
     return concurrent.length >= availableStaff;
   };
 
   const handleConfirmBooking = async () => {
     if (!bookingData.name || !bookingData.phone || !bookingData.date || !bookingData.time) {
-      alert("請填寫完整的姓名、電話、日期與時間");
+      alert("請填寫姓名、電話並選擇時間");
       return;
     }
     setIsSubmitting(true);
@@ -163,11 +161,7 @@ export default function App() {
         createdAt: serverTimestamp()
       });
       setBookingStep('success');
-    } catch (e) { 
-      alert('預約失敗，請重試'); 
-    } finally { 
-      setIsSubmitting(false); 
-    }
+    } catch (e) { alert('預約失敗'); } finally { setIsSubmitting(false); }
   };
 
   const filteredItems = cloudItems.filter(item => styleFilter === '全部' || item.category === styleFilter);
@@ -191,67 +185,47 @@ export default function App() {
       <main className="pt-20">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 uppercase">Reservation</h2>
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8">RESERVATION</h2>
             
-            {/* 結帳明細卡片 */}
-            <div className="bg-white border p-6 mb-8 flex items-center gap-6 shadow-sm">
-              <div className="w-24 h-24 bg-gray-50 flex-shrink-0">
-                {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="" />}
-              </div>
-              <div className="flex-1">
-                <p className="text-[10px] text-[#C29591] tracking-widest font-bold">預約款式</p>
-                <p className="text-sm font-medium">{selectedItem?.title}</p>
-                <div className="mt-2">
-                   <p className="text-[10px] text-gray-400 font-bold uppercase">附加服務</p>
-                   <select 
-                    className="w-full mt-1 border border-gray-100 text-[11px] p-2 bg-[#FAF9F6]"
-                    onChange={(e) => setSelectedAddon(addons.find(a => a.id === e.target.value) || null)}
-                   >
-                     <option value="">純款式 (無加購/卸甲)</option>
-                     {addons.map(a => <option key={a.id} value={a.id}>{a.name} (+${a.price})</option>)}
-                   </select>
+            <div className="bg-white border p-6 mb-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-gray-50 border">
+                      {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="" />}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold">{selectedItem?.title}</h4>
+                      <p className="text-[10px] text-gray-400">基本服務：{selectedItem?.duration || 90} 分鐘</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-[#C29591]">加購：{selectedAddon?.name || '無'}</p>
+                    <p className="text-xs text-[#C29591]">總耗時：{(Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0)} 分鐘</p>
+                    <p className="text-lg font-bold">NT$ {(Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] text-gray-400 uppercase">預估金額</p>
-                <p className="text-xl font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}</p>
-              </div>
             </div>
 
             <div className="bg-white border p-8 shadow-sm space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold mb-1 block">顧客姓名 *</label>
-                  <input type="text" placeholder="例：王小明" className="w-full border-b py-2 outline-none focus:border-[#C29591]" onChange={e => setBookingData({...bookingData, name: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold mb-1 block">聯絡電話 *</label>
-                  <input type="tel" placeholder="例：0912345678" className="w-full border-b py-2 outline-none focus:border-[#C29591]" onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
-                </div>
+                <input type="text" placeholder="顧客姓名" className="border-b py-2 outline-none" onChange={e => setBookingData({...bookingData, name: e.target.value})} />
+                <input type="tel" placeholder="聯絡電話" className="border-b py-2 outline-none" onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
               </div>
-              
-              <div className="flex flex-col items-center">
-                <label className="text-[10px] text-gray-400 font-bold mb-4 uppercase">Step 2: 選擇日期與時間</label>
+              <div className="flex justify-center">
                 <CustomCalendar selectedDate={bookingData.date} onDateSelect={(d) => setBookingData({...bookingData, date: d, time: ''})} settings={shopSettings} />
               </div>
-
               {bookingData.date && (
                 <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
                   {TIME_SLOTS.map(t => (
                     <button key={t} disabled={isTimeSlotFull(bookingData.date, t)} onClick={() => setBookingData({...bookingData, time:t})}
-                      className={`py-3 text-[10px] border transition-all ${bookingData.time===t ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white disabled:opacity-20'}`}>
+                      className={`py-3 text-[10px] border transition-all ${bookingData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white disabled:opacity-20'}`}>
                       {t}
                     </button>
                   ))}
                 </div>
               )}
-
-              <button 
-                disabled={isSubmitting || !bookingData.time || !bookingData.name || !bookingData.phone} 
-                onClick={handleConfirmBooking} 
-                className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest disabled:bg-gray-200"
-              >
-                {isSubmitting ? '處理中...' : '確認送出預約'}
+              <button disabled={isSubmitting || !bookingData.time} onClick={handleConfirmBooking} className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest">
+                {isSubmitting ? '處理中...' : '確認預約'}
               </button>
             </div>
           </div>
@@ -259,17 +233,12 @@ export default function App() {
           <div className="max-w-md mx-auto py-20 px-6 text-center">
             <CheckCircle size={56} className="text-[#C29591] mx-auto mb-4" />
             <h2 className="text-2xl font-light tracking-[0.3em] mb-10">預約成功</h2>
-            <div className="bg-white border p-8 space-y-2">
-              <p className="text-sm">預約日期：{bookingData.date}</p>
-              <p className="text-sm">預約時間：{bookingData.time}</p>
-              <p className="text-xs text-gray-400 mt-4">我們將會發送簡訊通知您</p>
-              <button onClick={() => {setBookingStep('none'); setActiveTab('home');}} className="w-full mt-8 bg-[#463E3E] text-white py-4 text-xs">回到首頁</button>
-            </div>
+            <button onClick={() => {setBookingStep('none'); setActiveTab('home');}} className="w-full mt-6 bg-[#463E3E] text-white py-4 text-xs">回到首頁</button>
           </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
-            <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
+            <div className="w-full max-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Beyond<br/>Expectation</h2>
@@ -277,13 +246,11 @@ export default function App() {
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 py-12">
-            {/* 分類篩選 */}
             <div className="flex flex-wrap gap-4 justify-center border-b border-[#EAE7E2] pb-8 mb-12">
                {STYLE_CATEGORIES.map(c => (
                  <button key={c} onClick={() => setStyleFilter(c)} className={`text-[10px] tracking-widest px-4 py-1 ${styleFilter===c ? 'text-[#C29591] font-bold underline underline-offset-8' : 'text-gray-400'}`}>{c}</button>
                ))}
             </div>
-            {/* 款式列表 */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
               {filteredItems.map(item => (
                 <div key={item.id} className="border p-8 text-center bg-white shadow-sm relative group">
@@ -292,12 +259,24 @@ export default function App() {
                       <Trash2 size={16}/>
                     </button>
                   )}
-                  <div className="aspect-[3/4] bg-gray-50 mb-6 overflow-hidden">
+                  <div className="aspect-[3/4] bg-gray-50 mb-6">
                     {item.images?.[0] && <img src={item.images[0]} className="w-full h-full object-cover" alt="" />}
                   </div>
-                  <h3 className="mb-4 tracking-widest text-sm font-medium text-[#463E3E]">{item.title}</h3>
+                  <h3 className="mb-2 tracking-widest text-sm font-medium">{item.title}</h3>
+                  <div className="flex items-center justify-center gap-1.5 text-gray-400 text-[10px] mb-2 tracking-widest uppercase font-light"><Clock size={12} />服務時間：{item.duration || 90} 分鐘</div>
                   <p className="text-lg font-bold mb-6 text-[#C29591]">NT$ {item.price}</p>
-                  <button onClick={() => {setSelectedItem(item); setBookingStep('form'); window.scrollTo(0,0);}} className="bg-[#463E3E] text-white px-10 py-3 text-[10px] tracking-widest hover:bg-[#C29591] transition-colors">立即預約</button>
+                  
+                  <div className="space-y-4">
+                    <select className="w-full text-[11px] border border-[#EAE7E2] py-2 px-3 bg-[#FAF9F6] outline-none" 
+                      onChange={(e) => {
+                        const addon = addons.find(a => a.id === e.target.value);
+                        setSelectedAddon(addon || null);
+                      }}>
+                      <option value="">選擇加購服務</option>
+                      {addons.map(a => <option key={a.id} value={a.id}>{a.name} (+${a.price} / {a.duration}分)</option>)}
+                    </select>
+                    <button onClick={() => {setSelectedItem(item); setBookingStep('form'); window.scrollTo(0,0);}} className="w-full bg-[#463E3E] text-white py-3 text-[10px] tracking-widest">立即預約</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -305,23 +284,22 @@ export default function App() {
         )}
       </main>
 
-      {/* 管理中心彈窗 */}
+      {/* 管理彈窗 */}
       {isBookingManagerOpen && (
         <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-6xl h-[85vh] shadow-2xl flex flex-col overflow-hidden">
             <div className="bg-white px-8 py-6 border-b flex justify-between items-center">
-              <h3 className="text-xs font-bold tracking-[0.2em] uppercase">SYSTEM DASHBOARD / 系統管理中心</h3>
+              <h3 className="text-xs font-bold tracking-[0.2em] uppercase">管理中心</h3>
               <div className="flex gap-4">
-                <button onClick={() => setIsUploadModalOpen(true)} className="text-[10px] border border-[#463E3E] px-4 py-2 hover:bg-[#463E3E] hover:text-white transition-all">+ 上傳新款式</button>
+                <button onClick={() => setIsUploadModalOpen(true)} className="text-[10px] border px-4 py-2">+ 上傳款式</button>
                 <button onClick={() => setIsBookingManagerOpen(false)}><X size={24}/></button>
               </div>
             </div>
-
             <div className="flex-1 overflow-y-auto p-8 space-y-12 bg-[#FAF9F6]">
-              {/* 美甲師與請假 */}
+              {/* 人員管理 */}
               <section className="space-y-6">
                 <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
-                  <h4 className="text-sm font-bold tracking-widest uppercase">美甲師團隊與請假</h4>
+                  <h4 className="text-sm font-bold tracking-widest">美甲師請假管理</h4>
                   <button onClick={() => {
                     const name = prompt("請輸入人員姓名：");
                     if (name) {
@@ -334,28 +312,22 @@ export default function App() {
                   {(shopSettings.staff || []).map(staff => (
                     <div key={staff.id} className="bg-white border p-5 shadow-sm space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold flex items-center gap-2"><Users size={14}/> {staff.name}</span>
+                        <span className="text-xs font-bold">{staff.name}</span>
                         <button onClick={() => {
-                          if(confirm(`確定移除 ${staff.name}？`)) {
-                            const newS = shopSettings.staff.filter(s => s.id !== staff.id);
-                            setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), { ...shopSettings, staff: newS });
-                          }
-                        }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
+                          const newS = shopSettings.staff.filter(s => s.id !== staff.id);
+                          setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), { ...shopSettings, staff: newS });
+                        }}><Trash2 size={14} className="text-gray-300"/></button>
                       </div>
-                      <input type="date" className="text-[10px] border p-2 w-full outline-none" onChange={(e) => {
-                        if (!e.target.value) return;
+                      <input type="date" className="text-[10px] border p-2 w-full" onChange={(e) => {
                         const updated = shopSettings.staff.map(s => {
-                          if (s.id === staff.id) {
-                            const leaves = s.leaveDates || [];
-                            return { ...s, leaveDates: leaves.includes(e.target.value) ? leaves : [...leaves, e.target.value].sort() };
-                          }
+                          if (s.id === staff.id) return { ...s, leaveDates: [...(s.leaveDates || []), e.target.value] };
                           return s;
                         });
                         setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), { ...shopSettings, staff: updated });
                       }} />
                       <div className="flex flex-wrap gap-1">
                         {(staff.leaveDates || []).map(d => (
-                          <span key={d} className="text-[9px] bg-red-50 text-red-500 px-2 py-1 flex items-center gap-1 border border-red-100">
+                          <span key={d} className="text-[9px] bg-red-50 text-red-500 px-2 py-1 border border-red-100 flex items-center gap-1">
                             {d} <X size={10} className="cursor-pointer" onClick={() => {
                               const updated = shopSettings.staff.map(s => {
                                 if (s.id === staff.id) return { ...s, leaveDates: s.leaveDates.filter(ld => ld !== d) };
@@ -371,53 +343,43 @@ export default function App() {
                 </div>
               </section>
 
-              {/* 加購品管理 */}
+              {/* 加購項目管理 */}
               <section className="space-y-6">
                  <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
-                  <h4 className="text-sm font-bold tracking-widest uppercase">加購服務/卸甲管理</h4>
+                  <h4 className="text-sm font-bold tracking-widest">加購服務管理 (卸甲/延甲)</h4>
                   <button onClick={() => {
                     const name = prompt("加購項目名稱：");
                     const price = prompt("加購價格：");
-                    if(name && price) addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), { name, price: Number(price), duration: 30 });
-                  }} className="text-[10px] bg-[#463E3E] text-white px-4 py-2 rounded-full">+ 新增項目</button>
+                    const duration = prompt("加購時間(分鐘)：");
+                    if(name && price && duration) addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), { name, price: Number(price), duration: Number(duration) });
+                  }} className="text-[10px] bg-[#463E3E] text-white px-4 py-2 rounded-full">+ 新增加購</button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {addons.map(a => (
                     <div key={a.id} className="bg-white border p-4 flex justify-between items-center shadow-sm">
-                      <div>
-                        <p className="text-xs font-bold">{a.name}</p>
-                        <p className="text-[10px] text-[#C29591]">+$ {a.price}</p>
-                      </div>
-                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', a.id))}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
+                      <div><p className="text-xs font-bold">{a.name}</p><p className="text-[10px] text-[#C29591]">+${a.price} / {a.duration}分</p></div>
+                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', a.id))}><Trash2 size={14} className="text-gray-300"/></button>
                     </div>
                   ))}
                 </div>
               </section>
 
-              {/* 預約單列表 */}
+              {/* 預約訂單 */}
               <section className="space-y-6">
                 <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">預約訂單列表</h4>
                 <div className="bg-white border overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="p-4">預約日期</th>
-                        <th className="p-4">顧客資訊</th>
-                        <th className="p-4">項目</th>
-                        <th className="p-4">金額</th>
-                        <th className="p-4">操作</th>
-                      </tr>
+                      <tr><th className="p-4">日期時間</th><th className="p-4">顧客</th><th className="p-4">項目</th><th className="p-4">金額</th><th className="p-4">操作</th></tr>
                     </thead>
                     <tbody className="divide-y">
                       {allBookings.map(b => (
                         <tr key={b.id} className="hover:bg-gray-50">
-                          <td className="p-4 font-bold">{b.date} <br/> {b.time}</td>
-                          <td className="p-4">{b.name} <br/> {b.phone}</td>
-                          <td className="p-4">{b.itemTitle} <br/> <span className="text-[#C29591]">+{b.addonName}</span></td>
+                          <td className="p-4 font-bold">{b.date} {b.time}</td>
+                          <td className="p-4">{b.name}<br/>{b.phone}</td>
+                          <td className="p-4">{b.itemTitle}<br/><span className="text-[#C29591]">+{b.addonName}</span></td>
                           <td className="p-4 font-bold">NT$ {b.totalAmount}</td>
-                          <td className="p-4">
-                            <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id))} className="text-gray-300 hover:text-red-500"><Trash2 size={16}/></button>
-                          </td>
+                          <td className="p-4"><button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id))}><Trash2 size={16} className="text-gray-300"/></button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -429,7 +391,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 登入與款式上傳 Modal (略，與原代碼一致) */}
+      {/* 登入與上傳彈窗 (保持不變) */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4">
           <div className="bg-white p-10 max-w-sm w-full shadow-2xl">
@@ -445,26 +407,20 @@ export default function App() {
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[400] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full shadow-2xl space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="tracking-widest font-light">上傳款式圖資</h3>
-              <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
-            </div>
+            <h3 className="tracking-widest font-light">上傳款式</h3>
             <input type="text" placeholder="款式名稱" className="w-full border-b py-2 outline-none" onChange={e => setFormData({...formData, title: e.target.value})} />
             <div className="flex gap-4">
               <input type="number" placeholder="金額" className="w-1/2 border-b py-2 outline-none" onChange={e => setFormData({...formData, price: e.target.value})} />
-              <select className="w-1/2 border-b py-2 outline-none" onChange={e => setFormData({...formData, category: e.target.value})}>
-                {STYLE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <input type="number" placeholder="時間(分)" className="w-1/2 border-b py-2 outline-none" onChange={e => setFormData({...formData, duration: e.target.value})} />
             </div>
-            <label className="block w-full border-2 border-dashed py-10 text-center cursor-pointer">
-              <Upload size={24} className="mx-auto text-gray-300 mb-2"/>
-              <span className="text-xs text-gray-400">點此貼上圖片網址或選擇檔案 (目前支援網址輸入)</span>
-              <input type="text" placeholder="圖片 URL" className="mt-4 w-full border-b py-1 px-2 text-[10px]" onChange={e => setFormData({...formData, images: [e.target.value]})} />
-            </label>
+            <select className="w-full border-b py-2 outline-none" onChange={e => setFormData({...formData, category: e.target.value})}>
+              {STYLE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <input type="text" placeholder="圖片網址" className="w-full border-b py-2 outline-none text-xs" onChange={e => setFormData({...formData, images: [e.target.value]})} />
             <button onClick={async () => {
-              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), {...formData, price: Number(formData.price), createdAt: serverTimestamp()});
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), {...formData, price: Number(formData.price), duration: Number(formData.duration), createdAt: serverTimestamp()});
               setIsUploadModalOpen(false);
-            }} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest">發布款式</button>
+            }} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest">確認發布</button>
           </div>
         </div>
       )}
