@@ -662,6 +662,15 @@ export default function App() {
                 </div>
              )}
           </div>
+        ) : activeTab === 'home' ? (
+          <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
+            <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
+            <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
+              <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
+            </div>
+            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
+            <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
+          </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
