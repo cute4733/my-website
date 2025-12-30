@@ -40,7 +40,7 @@ const timeToMinutes = (timeStr) => {
   return h * 60 + m;
 };
 
-// --- 款式卡片組件 (支援多圖) ---
+// --- 子組件：款式卡片 (處理多圖左右更變) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
@@ -61,11 +61,11 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         <img src={images[currentIdx]} className="w-full h-full object-cover transition-opacity duration-300" alt={item.title} />
         {images.length > 1 && (
           <>
-            <button onClick={prevImg} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity">
-              <ChevronLeft size={18} />
+            <button onClick={prevImg} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity z-10">
+              <ChevronLeft size={20} />
             </button>
-            <button onClick={nextImg} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity">
-              <ChevronRight size={18} />
+            <button onClick={nextImg} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity z-10">
+              <ChevronRight size={20} />
             </button>
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
               {images.map((_, i) => (
@@ -75,9 +75,9 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
           </>
         )}
         {isLoggedIn && (
-          <div className="absolute top-4 right-4 flex gap-2 z-10">
-            <button onClick={() => onEdit(item)} className="p-2 bg-white/90 rounded-full text-blue-600 shadow-sm"><Edit3 size={16}/></button>
-            <button onClick={() => onDelete(item.id)} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm"><Trash2 size={16}/></button>
+          <div className="absolute top-4 right-4 flex gap-2 z-20">
+            <button onClick={() => onEdit(item)} className="p-2 bg-white/90 rounded-full text-blue-600 shadow-sm hover:bg-white"><Edit3 size={16}/></button>
+            <button onClick={() => onDelete(item.id)} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:bg-white"><Trash2 size={16}/></button>
           </div>
         )}
       </div>
@@ -210,7 +210,7 @@ export default function App() {
     const concurrentCount = bookingsToday.filter(b => {
       const start = timeToMinutes(b.time);
       const duration = Number(b.totalDuration) || 90;
-      return checkMin >= start && checkMin < start + duration + 20; // 這裡是您要求的 20 分鐘緩衝
+      return checkMin >= start && checkMin < start + duration + 20;
     }).length;
     return concurrentCount >= (shopSettings.maxCapacity || 1);
   };
@@ -254,24 +254,22 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
-      {/* 導航欄 */}
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <h1 className="text-xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E]" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-6 text-sm tracking-widest font-medium uppercase items-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={activeTab === 'home' ? 'text-[#C29591]' : ''}>首頁</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
-            {isLoggedIn && (
+            
+            {/* 這裡重新放回圖示渲染邏輯 */}
+            {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2]">
-                <button onClick={() => {setEditingItem(null); setFormData({title:'', price:'', category:'極簡氣質', duration:'90', images:[]}); setIsUploadModalOpen(true)}} className="text-[#C29591] hover:opacity-70">
-                  <Plus size={18}/>
-                </button>
-                <button onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591] hover:opacity-70">
-                  <Settings size={18}/>
-                </button>
+                <button onClick={() => {setEditingItem(null); setFormData({title:'', price:'', category:'極簡氣質', duration:'90', images:[]}); setIsUploadModalOpen(true)}} className="text-[#C29591]"><Plus size={18}/></button>
+                <button onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591]"><Settings size={18}/></button>
               </div>
+            ) : (
+              <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 opacity-20"><Lock size={12}/></button>
             )}
-            {!isLoggedIn && <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 opacity-20"><Lock size={12}/></button>}
           </div>
         </div>
       </nav>
@@ -324,7 +322,6 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'home' ? (
-          /* 首頁內容保持原樣 */
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
             <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
@@ -353,45 +350,41 @@ export default function App() {
         )}
       </main>
 
-      {/* 管理彈窗 - 密碼輸入 */}
+      {/* 彈窗：管理密碼 */}
       {isAdminModalOpen && (
-        <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white p-10 max-w-sm w-full shadow-2xl">
-            <h3 className="text-center text-xs tracking-widest text-gray-400 mb-6 uppercase">Admin Access</h3>
-            <form onSubmit={(e) => { e.preventDefault(); if(passwordInput==="8888") setIsLoggedIn(true); setIsAdminModalOpen(false); setPasswordInput(''); }}>
-              <input type="password" placeholder="••••" className="w-full border-b py-4 text-center tracking-[1.5em] outline-none text-xl" onChange={e => setPasswordInput(e.target.value)} autoFocus />
-              <button className="w-full bg-[#463E3E] text-white py-4 mt-8 text-xs tracking-widest">LOGIN</button>
-              <button type="button" onClick={()=>setIsAdminModalOpen(false)} className="w-full text-[10px] text-gray-400 mt-4 tracking-widest uppercase">Cancel</button>
+        <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4">
+          <div className="bg-white p-10 max-w-sm w-full">
+            <form onSubmit={(e) => { e.preventDefault(); if(passwordInput==="8888") setIsLoggedIn(true); setIsAdminModalOpen(false); }}>
+              <input type="password" placeholder="••••" className="w-full border-b py-4 text-center tracking-[1.5em] outline-none" onChange={e => setPasswordInput(e.target.value)} autoFocus />
+              <button className="w-full bg-[#463E3E] text-white py-4 mt-6">ENTER</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* 上傳彈窗 */}
+      {/* 彈窗：上傳款式 */}
       {isUploadModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4">
-          <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex justify-between items-center mb-8 border-b pb-4">
-               <h3 className="tracking-widest font-light text-sm uppercase">{editingItem ? 'Edit Design' : 'Upload Design'}</h3>
-               <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
+        <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
+          <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="tracking-widest font-light">款式發布</h3>
+              <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
             </div>
             <form onSubmit={handleItemSubmit} className="space-y-6">
-              <input type="text" required className="w-full border-b py-2 outline-none text-sm" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
+              <input type="text" required className="w-full border-b py-2 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
               <div className="flex gap-4">
-                <input type="number" required className="w-1/2 border-b py-2 outline-none text-sm" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="價格" />
-                <input type="number" required className="w-1/2 border-b py-2 outline-none text-sm" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="分鐘" />
+                <input type="number" required className="w-1/2 border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="價格" />
+                <input type="number" required className="w-1/2 border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="分鐘" />
               </div>
               <div className="flex flex-wrap gap-2">
                 {formData.images.map((img, i) => (
                   <div key={i} className="relative w-20 h-20 border">
                     <img src={img} className="w-full h-full object-cover" />
-                    <button type="button" onClick={() => setFormData({...formData, images: formData.images.filter((_, idx) => idx !== i)})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 shadow-sm"><X size={12}/></button>
+                    <button type="button" onClick={() => setFormData({...formData, images: formData.images.filter((_, idx) => idx !== i)})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
                   </div>
                 ))}
-                <label className="w-20 h-20 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
-                  <Upload size={16} className="text-gray-400 mb-1" />
-                  <span className="text-[10px] text-gray-400 uppercase">Add</span>
-                  <input type="file" hidden accept="image/*" multiple onChange={(e) => {
+                <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer">
+                  <Upload size={16} /><input type="file" hidden accept="image/*" multiple onChange={(e) => {
                     Array.from(e.target.files).forEach(file => {
                       const reader = new FileReader();
                       reader.onloadend = () => setFormData(p => ({...p, images: [...p.images, reader.result]}));
@@ -400,41 +393,31 @@ export default function App() {
                   }} />
                 </label>
               </div>
-              <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase hover:bg-[#C29591] transition-colors">{isUploading ? 'Uploading...' : 'Confirm Publish'}</button>
+              <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase">{isUploading ? '處理中...' : '確認發布'}</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* 預約管理彈窗 */}
+      {/* 彈窗：預約管理 */}
       {isBookingManagerOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl p-8 max-h-[85vh] flex flex-col shadow-2xl">
+        <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl p-8 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center mb-8 border-b pb-4">
-              <h3 className="text-sm tracking-[0.2em] font-medium uppercase">Booking Management</h3>
-              <button onClick={() => setIsBookingManagerOpen(false)} className="hover:rotate-90 transition-transform"><X size={24}/></button>
+              <h3 className="text-sm tracking-widest font-medium">預約管理</h3>
+              <button onClick={() => setIsBookingManagerOpen(false)}><X size={24}/></button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-              {allBookings.length === 0 ? (
-                <p className="text-center py-20 text-gray-300 text-xs tracking-widest uppercase">No bookings yet</p>
-              ) : (
-                allBookings.map(b => (
-                  <div key={b.id} className="border border-[#F0EDEA] p-5 flex justify-between items-center bg-[#FAF9F6] hover:border-[#C29591] transition-colors group">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-[#463E3E]">{b.date} {b.time}</span>
-                        <span className="text-[10px] bg-white px-2 py-0.5 border border-[#EAE7E2] rounded text-gray-400">{b.itemTitle}</span>
-                      </div>
-                      <div className="text-[11px] text-gray-500 tracking-wide">
-                        {b.name} • {b.phone} • {b.addonName === '無' ? '無附加' : b.addonName} • <span className="text-[#C29591]">NT$ {b.totalAmount}</span>
-                      </div>
-                    </div>
-                    <button onClick={() => { if(window.confirm('確定刪除此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)) }} className="text-gray-300 hover:text-red-500 transition-colors p-2">
-                      <Trash2 size={18}/>
-                    </button>
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+              {allBookings.map(b => (
+                <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6]">
+                  <div className="text-[11px] leading-relaxed">
+                    <div className="font-bold text-sm mb-1">{b.date} {b.time}</div>
+                    <div>{b.name} • {b.phone} • {b.itemTitle}</div>
+                    <div className="text-[#C29591]">NT$ {b.totalAmount}</div>
                   </div>
-                ))
-              )}
+                  <button onClick={() => { if(confirm('確定刪除？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)) }} className="text-red-400 p-2"><Trash2 size={18}/></button>
+                </div>
+              ))}
             </div>
           </div>
         </div>
