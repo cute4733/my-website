@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -21,9 +21,8 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const CLEANING_TIME = 20; // 清潔緩衝時間
+const CLEANING_TIME = 20;
 
-// 時間範圍 12:00 - 19:00
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 19; h++) {
@@ -122,8 +121,8 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   );
 };
 
-// --- 子組件：前台預約月曆 ---
-const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
+// --- 子組件：前台預約月曆 (支援門市過濾) ---
+const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
   const currentYear = viewDate.getFullYear();
@@ -137,12 +136,20 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
     for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const isShopHoliday = (settings?.specificHolidays || []).includes(dateStr);
-      const staffList = settings?.staff || [];
+      
+      // 判斷該門市是否公休
+      const isGlobalHoliday = (settings?.holidays || []).some(h => h.date === dateStr && h.storeId === 'all');
+      const isStoreHoliday = (settings?.holidays || []).some(h => h.date === dateStr && h.storeId === selectedStoreId);
+      const isHoliday = isGlobalHoliday || isStoreHoliday;
+
+      // 判斷該門市員工是否全請假
+      const staffList = (settings?.staff || []).filter(s => s.storeId === selectedStoreId);
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
+      
       const isPastOrToday = new Date(currentYear, currentMonth, d) <= today;
-      const isDisabled = isShopHoliday || isAllOnLeave || isPastOrToday;
+      
+      const isDisabled = isHoliday || isAllOnLeave || isPastOrToday || !selectedStoreId; // 若未選門市也禁用
       const isSelected = selectedDate === dateStr;
 
       days.push(
@@ -225,11 +232,13 @@ export default function App() {
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
-  const [shopSettings, setShopSettings] = useState({ specificHolidays: [], staff: [] });
-  const [newHolidayInput, setNewHolidayInput] = useState('');
+  // shopSettings 結構更新: { stores: [], staff: [], holidays: [] }
+  const [shopSettings, setShopSettings] = useState({ stores: [], staff: [], holidays: [] });
+  const [newHolidayInput, setNewHolidayInput] = useState({ date: '', storeId: 'all' });
+  const [newStoreInput, setNewStoreInput] = useState('');
   
   // 管理中心狀態
-  const [managerTab, setManagerTab] = useState('addons'); 
+  const [managerTab, setManagerTab] = useState('stores'); // 'stores' | 'addons' | 'staff_holiday' | 'bookings'
   const [bookingViewMode, setBookingViewMode] = useState('list'); 
   const [adminSelectedDate, setAdminSelectedDate] = useState('');
 
@@ -238,7 +247,7 @@ export default function App() {
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
-  const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '' });
+  const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '', storeId: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -262,7 +271,15 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings'), (d) => {
-      if (d.exists()) setShopSettings(d.data());
+      if (d.exists()) {
+        const data = d.data();
+        // 兼容舊資料結構
+        setShopSettings({
+          stores: data.stores || [],
+          staff: data.staff || [],
+          holidays: data.holidays || (data.specificHolidays ? data.specificHolidays.map(d => ({date: d, storeId: 'all'})) : [])
+        });
+      }
     });
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), (s) => 
       setCloudItems(s.docs.map(d => ({ id: d.id, ...d.data() })))
@@ -278,20 +295,27 @@ export default function App() {
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
   const isTimeSlotFull = (date, checkTimeStr) => {
-    if (!date || !checkTimeStr) return false;
+    if (!date || !checkTimeStr || !bookingData.storeId) return false;
     
     const todayStr = getTodayString();
     if (date === todayStr) return true;
     
-    const staffList = shopSettings.staff || [];
+    // 篩選該門市員工
+    const staffList = (shopSettings.staff || []).filter(s => s.storeId === bookingData.storeId);
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
-    const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 1;
+    // 若該店無員工，則容量為 0 (不可預約)
+    const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 0;
+
+    if (availableStaffCount <= 0) return true;
 
     const startA = timeToMinutes(checkTimeStr);
     const endA = startA + calcTotalDuration() + CLEANING_TIME;
 
+    // 篩選該門市的預約
     const concurrentBookings = allBookings.filter(b => {
       if (b.date !== date) return false;
+      if (b.storeId !== bookingData.storeId) return false; // 不同店不影響
+      
       const startB = timeToMinutes(b.time);
       const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME;
       return (startA < endB) && (startB < endA);
@@ -313,7 +337,7 @@ export default function App() {
             }
         }
     }
-  }, [bookingStep, bookingData.date, allBookings]); 
+  }, [bookingStep, bookingData.date, allBookings, bookingData.storeId]); // 加入 storeId 依賴
 
   const saveShopSettings = async (newSettings) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
@@ -338,10 +362,12 @@ export default function App() {
     setIsSubmitting(true);
     const finalAmount = (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
     const finalDuration = (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
+    const selectedStore = shopSettings.stores.find(s => s.id === bookingData.storeId);
 
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookingData,
+        storeName: selectedStore ? selectedStore.name : '未指定',
         itemTitle: selectedItem?.title,
         addonName: selectedAddon?.name || '無',
         totalAmount: finalAmount,
@@ -411,7 +437,8 @@ export default function App() {
     bookingData.name.trim() !== '' && 
     !isNameInvalid &&
     bookingData.phone.length === 10 && 
-    bookingData.time !== '';
+    bookingData.time !== '' &&
+    bookingData.storeId !== ''; // 必須選擇門市
 
   const sortedAdminBookings = [...allBookings].sort((a, b) => {
     return new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`);
@@ -421,14 +448,12 @@ export default function App() {
     ? sortedAdminBookings.filter(b => b.date === adminSelectedDate)
     : sortedAdminBookings;
 
-  // --- 新增：匯出 CSV 功能 ---
   const handleExportCSV = () => {
-    // 1. 定義標題
-    const headers = ['日期', '時間', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長'];
-    // 2. 轉換資料內容
+    const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長'];
     const rows = sortedAdminBookings.map(b => [
       b.date,
       b.time,
+      b.storeName || '未指定',
       b.name,
       b.phone,
       b.itemTitle,
@@ -436,12 +461,7 @@ export default function App() {
       b.totalAmount,
       b.totalDuration
     ]);
-    // 3. 組合 CSV 字串
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
-    // 4. 建立下載連結 (加入 BOM \uFEFF 以支援中文)
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -498,6 +518,24 @@ export default function App() {
             </div>
 
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
+              {/* 門市選擇器 */}
+              <div className="border-b border-[#EAE7E2] pb-6">
+                <label className="block text-xs font-bold text-gray-400 mb-2">選擇預約門市</label>
+                <div className="flex flex-wrap gap-3">
+                  {shopSettings.stores.length > 0 ? shopSettings.stores.map(store => (
+                    <button
+                      key={store.id}
+                      onClick={() => { setBookingData({...bookingData, storeId: store.id, date: '', time: ''}); }}
+                      className={`px-4 py-2 text-xs border rounded-full transition-all ${bookingData.storeId === store.id ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}
+                    >
+                      {store.name}
+                    </button>
+                  )) : (
+                    <p className="text-xs text-red-400">目前無可預約門市，請聯繫客服</p>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="relative">
                   <input 
@@ -518,21 +556,24 @@ export default function App() {
                   className={`border-b py-2 outline-none ${isPhoneInvalid ? 'border-red-300 text-red-500' : ''}`}
                   value={bookingData.phone} 
                   onChange={e => {
-                    const val = e.target.value.replace(/\D/g, ''); // 只允許數字
+                    const val = e.target.value.replace(/\D/g, ''); 
                     if(val.length <= 10) setBookingData({...bookingData, phone: val});
                   }} 
                 />
               </div>
 
               <div className="flex justify-center pt-2">
-                <CustomCalendar selectedDate={bookingData.date} 
+                <CustomCalendar 
+                  selectedDate={bookingData.date} 
                   onDateSelect={(d) => {
                     setBookingData({...bookingData, date: d, time: ''}); 
                   }} 
-                  settings={shopSettings} />
+                  settings={shopSettings} 
+                  selectedStoreId={bookingData.storeId} // 傳入門市ID
+                />
               </div>
               
-              {bookingData.date && (
+              {bookingData.date && bookingData.storeId && (
                 <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
                   {TIME_SLOTS.map(t => (
                     <button key={t} disabled={isTimeSlotFull(bookingData.date, t)} onClick={() => setBookingData({...bookingData, time:t})} className={`py-2 text-[10px] border ${bookingData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white disabled:opacity-20'}`}>{t}</button>
@@ -546,6 +587,7 @@ export default function App() {
                 className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? '處理中...' : 
+                 !bookingData.storeId ? '請先選擇門市' :
                  isNameInvalid ? '姓名不可包含數字' :
                  (!bookingData.name.trim()) ? '請填寫姓名' : 
                  (bookingData.phone.length !== 10) ? '電話需為10碼數字' : 
@@ -584,6 +626,9 @@ export default function App() {
                      <span className="text-lg font-bold tracking-widest">{bookingData.date}</span>
                      <span className="text-[#C29591]">•</span>
                      <span className="text-xl font-bold tracking-widest">{bookingData.time}</span>
+                  </div>
+                  <div className="mt-2 text-xs font-bold text-[#C29591]">
+                    {shopSettings.stores.find(s=>s.id === bookingData.storeId)?.name}
                   </div>
                 </div>
 
@@ -727,6 +772,7 @@ export default function App() {
                         <span className="text-[#C29591]">•</span>
                         <span className="text-xl font-bold tracking-widest">{searchResult.time}</span>
                       </div>
+                      <div className="mt-2 text-xs font-bold text-[#C29591]">{searchResult.storeName}</div>
                     </div>
 
                     <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
@@ -830,6 +876,7 @@ export default function App() {
             {/* 管理分頁按鈕 */}
             <div className="flex border-b border-[#EAE7E2] px-8 bg-[#FAF9F6] sticky top-0 z-10">
               {[
+                { id: 'stores', label: '門市設定', icon: <Store size={14}/> },
                 { id: 'addons', label: '加購品項', icon: <Tag size={14}/> },
                 { id: 'staff_holiday', label: '人員與休假', icon: <Users size={14}/> },
                 { id: 'bookings', label: '預約管理', icon: <Calendar size={14}/> }
@@ -846,6 +893,43 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               
+              {/* --- 0. 門市設定區塊 --- */}
+              {managerTab === 'stores' && (
+                <section className="space-y-6 fade-in">
+                  <div className="border-l-4 border-[#C29591] pl-4">
+                    <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4>
+                    <p className="text-[10px] text-gray-400 mt-1">設定品牌旗下的所有分店</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      className="flex-1 border p-2 text-xs outline-none" 
+                      placeholder="輸入新門市名稱" 
+                      value={newStoreInput} 
+                      onChange={e => setNewStoreInput(e.target.value)}
+                    />
+                    <button onClick={() => {
+                      if(!newStoreInput) return;
+                      const newStore = { id: Date.now().toString(), name: newStoreInput };
+                      saveShopSettings({ ...shopSettings, stores: [...shopSettings.stores, newStore] });
+                      setNewStoreInput('');
+                    }} className="bg-[#463E3E] text-white px-4 text-xs">新增</button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {shopSettings.stores.map(store => (
+                      <div key={store.id} className="border p-4 flex justify-between items-center bg-white">
+                        <span className="font-bold text-xs">{store.name}</span>
+                        <button onClick={() => {
+                          if(confirm('確定刪除此門市？相關人員與預約將受影響。')) {
+                            saveShopSettings({ ...shopSettings, stores: shopSettings.stores.filter(s => s.id !== store.id) });
+                          }
+                        }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {/* --- 1. 加購品管理區塊 --- */}
               {managerTab === 'addons' && (
                 <section className="space-y-6 fade-in">
@@ -887,18 +971,22 @@ export default function App() {
                 </section>
               )}
 
-              {/* --- 2. 人員與休假管理區塊 --- */}
+              {/* --- 2. 人員與休假管理區塊 (含門市選擇) --- */}
               {managerTab === 'staff_holiday' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 fade-in">
                   <section className="space-y-6">
                     <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
                       <div>
                         <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">人員名單與請假</h4>
-                        <p className="text-[10px] text-gray-400 mt-1">設定美甲師名稱，系統會根據剩餘上班人數決定預約上限</p>
+                        <p className="text-[10px] text-gray-400 mt-1">設定美甲師名稱與所屬門市</p>
                       </div>
                       <button onClick={() => {
                         const name = prompt("請輸入美甲師姓名：");
-                        if(name) saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, leaveDates: [] }] });
+                        if(name) {
+                          // 簡單 prompt 無法選門市，預設 assign 給第一個門市，後續可改 UI
+                          const defaultStoreId = shopSettings.stores[0]?.id || '';
+                          saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, storeId: defaultStoreId, leaveDates: [] }] });
+                        }
                       }} className="text-[10px] bg-[#C29591] text-white px-4 py-2 rounded-full hover:bg-[#463E3E] transition-colors">+ 新增人員</button>
                     </div>
 
@@ -906,7 +994,19 @@ export default function App() {
                       {(shopSettings.staff || []).map(staff => (
                         <div key={staff.id} className="bg-[#FAF9F6] border border-[#EAE7E2] p-5 space-y-4">
                           <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold flex items-center gap-2"><Users size={14} className="text-[#C29591]"/> {staff.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold flex items-center gap-2"><Users size={14} className="text-[#C29591]"/> {staff.name}</span>
+                              <select 
+                                value={staff.storeId} 
+                                onChange={(e) => {
+                                  const updatedStaff = shopSettings.staff.map(s => s.id === staff.id ? {...s, storeId: e.target.value} : s);
+                                  saveShopSettings({...shopSettings, staff: updatedStaff});
+                                }}
+                                className="text-[10px] border bg-white p-1 ml-2"
+                              >
+                                {shopSettings.stores.map(store => <option key={store.id} value={store.id}>{store.name}</option>)}
+                              </select>
+                            </div>
                             <button onClick={() => {
                               if(confirm(`確定刪除 ${staff.name}？`)) saveShopSettings({ ...shopSettings, staff: shopSettings.staff.filter(s => s.id !== staff.id) });
                             }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
@@ -944,15 +1044,27 @@ export default function App() {
                   </section>
 
                   <section className="space-y-6">
-                      <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">全店公休日設定</h4>
-                      <div className="flex gap-2">
-                        <input type="date" className="flex-1 p-2 border text-xs outline-none focus:border-[#C29591]" value={newHolidayInput} onChange={e => setNewHolidayInput(e.target.value)} />
-                        <button onClick={() => { if(!newHolidayInput) return; saveShopSettings({...shopSettings, specificHolidays: [...(shopSettings.specificHolidays || []), newHolidayInput].sort()}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px] hover:bg-[#C29591] transition-colors">新增</button>
+                      <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">門市公休日設定</h4>
+                      <div className="flex gap-2 items-center bg-[#FAF9F6] p-3 border">
+                        <select 
+                          className="text-xs border p-2 bg-white"
+                          value={newHolidayInput.storeId}
+                          onChange={e => setNewHolidayInput({...newHolidayInput, storeId: e.target.value})}
+                        >
+                          <option value="all">全品牌公休</option>
+                          {shopSettings.stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <input type="date" className="flex-1 p-2 border text-xs outline-none focus:border-[#C29591]" value={newHolidayInput.date} onChange={e => setNewHolidayInput({...newHolidayInput, date: e.target.value})} />
+                        <button onClick={() => { 
+                          if(!newHolidayInput.date) return; 
+                          saveShopSettings({...shopSettings, holidays: [...(shopSettings.holidays || []), newHolidayInput]}); 
+                        }} className="bg-[#463E3E] text-white px-4 py-2 text-[10px] hover:bg-[#C29591] transition-colors">新增</button>
                       </div>
                       <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-                        {(shopSettings.specificHolidays || []).map(date => (
-                          <span key={date} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex items-center gap-2">
-                            {date} <X size={12} className="cursor-pointer" onClick={() => saveShopSettings({...shopSettings, specificHolidays: shopSettings.specificHolidays.filter(d => d !== date)})} />
+                        {(shopSettings.holidays || []).map((h, idx) => (
+                          <span key={idx} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex items-center gap-2">
+                            {h.date} ({h.storeId === 'all' ? '全' : shopSettings.stores.find(s=>s.id===h.storeId)?.name})
+                            <X size={12} className="cursor-pointer" onClick={() => saveShopSettings({...shopSettings, holidays: shopSettings.holidays.filter((_, i) => i !== idx)})} />
                           </span>
                         ))}
                       </div>
@@ -994,6 +1106,7 @@ export default function App() {
                             <div className="font-bold text-sm mb-1 flex items-center gap-2">
                               {b.date} <span className="text-[#C29591]">{b.time}</span>
                               {new Date(`${b.date} ${b.time}`) < new Date() && <span className="px-1.5 py-0.5 bg-gray-200 text-gray-500 rounded text-[9px]">已過期</span>}
+                              <span className="bg-white border px-1.5 rounded text-gray-400">{b.storeName}</span>
                             </div>
                             <div className="font-bold">{b.name} <span className="font-normal text-gray-400 mx-1">|</span> {b.phone}</div>
                             <div className="text-gray-500 mt-1">
@@ -1023,7 +1136,10 @@ export default function App() {
                           <div key={b.id} className="border p-4 bg-white shadow-sm text-xs relative overflow-hidden">
                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div>
                             <div className="flex justify-between">
-                              <span className="font-bold text-lg">{b.time}</span>
+                              <div className="flex gap-2 items-baseline">
+                                <span className="font-bold text-lg">{b.time}</span>
+                                <span className="text-[10px] text-gray-400 border px-1 rounded">{b.storeName}</span>
+                              </div>
                               <button onClick={() => { if(confirm('確定取消此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)); }} className="text-gray-300 hover:text-red-500"><Trash2 size={14}/></button>
                             </div>
                             <div className="mt-1 font-bold">{b.name}</div>
