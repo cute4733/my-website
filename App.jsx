@@ -21,8 +21,9 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const CLEANING_TIME = 20;
+const CLEANING_TIME = 20; // 清潔緩衝時間
 
+// 時間範圍 12:00 - 19:00
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 19; h++) {
@@ -91,19 +92,13 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
         )}
       </div>
       <div className="p-8 flex flex-col items-center text-center">
-        {/* 修改：字體加大至 text-xs (12px) */}
+        {/* 字體優化 */}
         <span className="text-xs text-[#C29591] tracking-[0.3em] uppercase mb-2 font-medium">{item.category}</span>
-        
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
-        
-        {/* 修改：字體加大至 text-xs (12px) */}
-        <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 uppercase tracking-widest font-light">
-            <Clock size={14} /> 預計服務：{item.duration || '90'} 分鐘
-        </div>
-        
+        <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 uppercase tracking-widest font-light"><Clock size={14} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         
-        {/* 修改：下拉選單字體加大至 text-sm (14px)，方便手機點選 */}
+        {/* 加購選單字體優化 */}
         <select 
           className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E] transition-colors ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
           onChange={(e) => setLocalAddonId(e.target.value)}
@@ -149,6 +144,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
       
+      // 禁止當日預約 (<= today)
       const isPastOrToday = new Date(currentYear, currentMonth, d) <= today;
       
       const isDisabled = isShopHoliday || isAllOnLeave || isPastOrToday;
@@ -236,16 +232,13 @@ export default function App() {
 
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
+  // --- 複雜預約邏輯：重疊檢測 + 員工數 + 清潔時間 + 當日禁止 ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
     
+    // 日期檢查 (雖然日曆已擋，雙重保險)
     const todayStr = getTodayString();
-    if (date === todayStr) {
-      const now = new Date();
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      const checkMinutes = timeToMinutes(checkTimeStr);
-      if (checkMinutes <= currentMinutes) return true;
-    }
+    if (date <= todayStr) return true; // 當日或過去皆不可預約
     
     const staffList = shopSettings.staff || [];
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
@@ -258,7 +251,7 @@ export default function App() {
       if (b.date !== date) return false;
       const startB = timeToMinutes(b.time);
       const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME;
-      return (startA < endB) && (startB < endA);
+      return (startA < endB) && (startB < endA); // 交集判斷
     });
 
     return concurrentBookings.length >= availableStaffCount;
@@ -268,6 +261,7 @@ export default function App() {
     return TIME_SLOTS.find(slot => !isTimeSlotFull(targetDate, slot)) || '';
   };
 
+  // 自動選時邏輯
   useEffect(() => {
     if (bookingStep === 'form' && bookingData.date) {
         if (!bookingData.time || isTimeSlotFull(bookingData.date, bookingData.time)) {
@@ -316,18 +310,35 @@ export default function App() {
     } catch (e) { alert('預約失敗'); } finally { setIsSubmitting(false); }
   };
 
+  // --- 商品上傳防呆 ---
   const handleItemSubmit = async (e) => {
     e.preventDefault();
     setIsUploading(true);
     try {
-      const payload = { ...formData, price: Number(formData.price), duration: Number(formData.duration), updatedAt: serverTimestamp() };
+      const priceVal = Number(formData.price);
+      const durationVal = Number(formData.duration);
+      if (isNaN(priceVal) || isNaN(durationVal)) throw new Error("價格或時間必須為數字");
+
+      const payloadSize = JSON.stringify(formData).length;
+      if (payloadSize > 900000) throw new Error("圖片檔案過大！請使用截圖或壓縮過的照片");
+
+      const payload = { 
+        ...formData, 
+        price: priceVal, 
+        duration: durationVal, 
+        updatedAt: serverTimestamp() 
+      };
+
       if (editingItem) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', editingItem.id), payload);
       else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), { ...payload, createdAt: serverTimestamp() });
+      
       setIsUploadModalOpen(false);
       setFormData({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
-    } catch (err) { alert("儲存失敗"); } finally { setIsUploading(false); }
+      alert("發布成功！");
+    } catch (err) { alert("儲存失敗：" + err.message); } finally { setIsUploading(false); }
   };
 
+  // --- 雙重驗證查詢 ---
   const handleSearchBooking = (e) => {
     e.preventDefault();
     if(!searchName.trim() || !searchPhone.trim()) return;
@@ -395,7 +406,6 @@ export default function App() {
                       {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="preview" />}
                    </div>
                    <div className="flex-1 space-y-1">
-                    {/* 修改：字體加大 */}
                     <p className="text-xs text-[#C29591] tracking-widest uppercase font-bold">預約項目</p>
                     <p className="text-sm font-medium">{selectedItem?.title} {selectedAddon ? `+ ${selectedAddon.name}` : ''}</p>
                     <p className="text-xs text-gray-400">
@@ -403,7 +413,6 @@ export default function App() {
                     </p>
                    </div>
                    <div className="text-right">
-                      {/* 修改：字體加大 */}
                       <p className="text-xs text-gray-400 tracking-widest uppercase">總金額 (含加購)</p>
                       <p className="text-lg font-bold text-[#463E3E]">NT$ {calcTotalAmount().toLocaleString()}</p>
                    </div>
@@ -672,53 +681,50 @@ export default function App() {
                 </div>
              )}
           </div>
+        ) : activeTab === 'home' ? (
+          // 首頁 (Pure Art)
+          <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
+            <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
+            <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
+              <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
+            </div>
+            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
+            <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
+          </div>
         ) : (
+          // 款式頁面
           <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
-            {/* 首頁區塊 */}
-            {activeTab === 'home' ? (
-                <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
-                    <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
-                    <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
-                    <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
-                    </div>
-                    <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
-                    <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
+            <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
+                <div className="flex flex-wrap gap-4 justify-center items-center">
+                   <span className="text-[10px] text-gray-300 tracking-widest mr-2">STYLE</span>
+                   {STYLE_CATEGORIES.map(c => (
+                     <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{c}</button>
+                   ))}
                 </div>
-            ) : (
-                <>
-                    <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
-                        <div className="flex flex-wrap gap-4 justify-center items-center">
-                        <span className="text-[10px] text-gray-300 tracking-widest mr-2">STYLE</span>
-                        {STYLE_CATEGORIES.map(c => (
-                            <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{c}</button>
-                        ))}
-                        </div>
 
-                        <div className="flex flex-wrap gap-4 justify-center items-center">
-                        <span className="text-[10px] text-gray-300 tracking-widest mr-2">PRICE</span>
-                        {PRICE_CATEGORIES.map(p => (
-                            <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{p}</button>
-                        ))}
-                        </div>
-                    </div>
+                <div className="flex flex-wrap gap-4 justify-center items-center">
+                   <span className="text-[10px] text-gray-300 tracking-widest mr-2">PRICE</span>
+                   {PRICE_CATEGORIES.map(p => (
+                     <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{p}</button>
+                   ))}
+                </div>
+            </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
-                    {filteredItems.map(item => (
-                        <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
-                        onEdit={(i) => {setEditingItem(i); setFormData(i); setIsUploadModalOpen(true);}}
-                        onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
-                        onBook={(i, addon) => { 
-                            setSelectedItem(i); 
-                            setSelectedAddon(addon); 
-                            setBookingStep('form'); 
-                            window.scrollTo(0,0); 
-                        }}
-                        addons={addons}
-                        />
-                    ))}
-                    </div>
-                </>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
+              {filteredItems.map(item => (
+                <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
+                  onEdit={(i) => {setEditingItem(i); setFormData(i); setIsUploadModalOpen(true);}}
+                  onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
+                  onBook={(i, addon) => { 
+                    setSelectedItem(i); 
+                    setSelectedAddon(addon); 
+                    setBookingStep('form'); 
+                    window.scrollTo(0,0); 
+                  }}
+                  addons={addons}
+                />
+              ))}
+            </div>
           </div>
         )}
       </main>
