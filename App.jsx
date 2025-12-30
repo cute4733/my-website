@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Sparkles } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -19,7 +19,6 @@ const appId = 'uniwawa01';
 
 // --- 常數設定 ---
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
-const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 const generateTimeSlots = () => {
@@ -41,7 +40,6 @@ const timeToMinutes = (timeStr) => {
 };
 
 // --- 子組件：款式卡片 ---
-// 更新：接收 addons 參數並連動下拉選單
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
@@ -160,7 +158,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cloudItems, setCloudItems] = useState([]);
-  const [addons, setAddons] = useState([]); // 加購品列表狀態
+  const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
   const [shopSettings, setShopSettings] = useState({ specificHolidays: [], staff: [] });
   const [newHolidayInput, setNewHolidayInput] = useState('');
@@ -170,7 +168,7 @@ export default function App() {
 
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedAddon, setSelectedAddon] = useState(null); // 當前選中的加購品
+  const [selectedAddon, setSelectedAddon] = useState(null);
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -214,7 +212,7 @@ export default function App() {
     const concurrent = allBookings.filter(b => {
       if (b.date !== date) return false;
       const start = timeToMinutes(b.time);
-      const end = start + (Number(b.totalDuration) || 90) + 20; // 緩衝20分鐘
+      const end = start + (Number(b.totalDuration) || 90) + 20;
       return checkMin >= start && checkMin < end;
     });
     return concurrent.length >= availableStaffCount;
@@ -224,7 +222,6 @@ export default function App() {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
   };
 
-  // --- 新增：處理加購品新增 ---
   const handleAddAddon = async (e) => {
     e.preventDefault();
     if(!addonForm.name || !addonForm.price) return;
@@ -235,7 +232,7 @@ export default function App() {
         duration: Number(addonForm.duration || 0),
         createdAt: serverTimestamp()
       });
-      setAddonForm({ name: '', price: '', duration: '' }); // 重置表單
+      setAddonForm({ name: '', price: '', duration: '' });
       alert('加購項目已新增');
     } catch (err) { alert("新增失敗：" + err.message); }
   };
@@ -337,14 +334,87 @@ export default function App() {
             </div>
           </div>
         ) : bookingStep === 'success' ? (
-          <div className="max-w-md mx-auto py-20 px-6 text-center">
-            <CheckCircle size={56} className="text-[#C29591] mx-auto mb-4" />
-            <h2 className="text-2xl font-light tracking-[0.3em] mb-10">預約成功</h2>
-            <div className="bg-white border p-8 shadow-sm">
-               {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-48 object-cover mb-4" alt="success" />}
-               <p className="text-sm">{bookingData.date} {bookingData.time}</p>
-               <button onClick={() => {setBookingStep('none'); setActiveTab('home');}} className="w-full mt-6 bg-[#463E3E] text-white py-4 text-xs">回到首頁</button>
+          <div className="max-w-lg mx-auto py-12 px-6">
+            {/* 頂部圖標與標題 */}
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#FAF9F6] mb-4">
+                <CheckCircle size={32} className="text-[#C29591]" />
+              </div>
+              <h2 className="text-xl font-light tracking-[0.3em] text-[#463E3E] uppercase">Reservation Confirmed</h2>
+              <p className="text-[10px] text-gray-400 mt-2 tracking-widest">您的預約已成功送出，期待與您相見</p>
             </div>
+
+            {/* 預約詳情卡片 */}
+            <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative">
+              {/* 頂部裝飾線 */}
+              <div className="h-1 w-full bg-[#C29591]"></div>
+
+              {/* 產品圖片區域 */}
+              {selectedItem?.images?.[0] && (
+                <div className="w-full h-56 relative bg-gray-50 group">
+                  <img src={selectedItem.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="success" />
+                  {/* 圖片上的漸層文字 */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-6">
+                    <div className="text-white">
+                      <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{selectedItem.category}</p>
+                      <h3 className="text-lg font-medium tracking-wide">{selectedItem.title}</h3>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 詳細資訊列表 */}
+              <div className="p-8">
+                {/* 核心時間顯示 (強調) */}
+                <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
+                  <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
+                  <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
+                     <span className="text-lg font-bold tracking-widest">{bookingData.date}</span>
+                     <span className="text-[#C29591]">•</span>
+                     <span className="text-xl font-bold tracking-widest">{bookingData.time}</span>
+                  </div>
+                </div>
+
+                {/* 資料條目 */}
+                <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
+                  <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                    <span className="text-gray-400">顧客姓名</span>
+                    <span className="font-medium text-[#463E3E]">{bookingData.name}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                    <span className="text-gray-400">聯絡電話</span>
+                    <span className="font-medium font-mono">{bookingData.phone}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                    <span className="text-gray-400">加購項目</span>
+                    <span className="font-medium text-[#463E3E]">{selectedAddon ? selectedAddon.name : '無'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                    <span className="text-gray-400">預計總時長</span>
+                    <span className="font-medium text-[#463E3E]">
+                      {(Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0)} 分鐘
+                    </span>
+                  </div>
+                </div>
+
+                {/* 總金額區塊 */}
+                <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
+                  <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
+                  <div className="text-2xl font-bold text-[#C29591] leading-none">
+                    <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
+                    {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 返回按鈕 */}
+            <button 
+              onClick={() => {setBookingStep('none'); setActiveTab('home');}} 
+              className="w-full mt-8 bg-[#463E3E] text-white py-4 text-xs tracking-[0.2em] font-medium hover:bg-[#C29591] transition-all duration-300 shadow-lg shadow-gray-200 uppercase"
+            >
+              回到首頁
+            </button>
           </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
@@ -400,7 +470,7 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               
-              {/* --- 1. 加購品管理區塊 (新增的功能) --- */}
+              {/* --- 1. 加購品管理區塊 --- */}
               <section className="space-y-6">
                 <div className="border-l-4 border-[#C29591] pl-4">
                   <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品設定 (指甲現況)</h4>
