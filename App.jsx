@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -21,9 +21,8 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const CLEANING_TIME = 20; // 清潔緩衝時間
+const CLEANING_TIME = 20;
 
-// 時間範圍 12:00 - 19:00
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 19; h++) {
@@ -92,13 +91,11 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
         )}
       </div>
       <div className="p-8 flex flex-col items-center text-center">
-        {/* 字體優化 */}
         <span className="text-xs text-[#C29591] tracking-[0.3em] uppercase mb-2 font-medium">{item.category}</span>
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
         <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 uppercase tracking-widest font-light"><Clock size={14} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         
-        {/* 加購選單字體優化 */}
         <select 
           className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E] transition-colors ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
           onChange={(e) => setLocalAddonId(e.target.value)}
@@ -143,10 +140,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
       const staffList = settings?.staff || [];
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
-      
-      // 禁止當日預約 (<= today)
       const isPastOrToday = new Date(currentYear, currentMonth, d) <= today;
-      
       const isDisabled = isShopHoliday || isAllOnLeave || isPastOrToday;
       const isSelected = selectedDate === dateStr;
 
@@ -188,6 +182,9 @@ export default function App() {
   const [shopSettings, setShopSettings] = useState({ specificHolidays: [], staff: [] });
   const [newHolidayInput, setNewHolidayInput] = useState('');
   
+  // 新增：管理中心分頁狀態
+  const [managerTab, setManagerTab] = useState('addons'); // 'addons' | 'staff' | 'calendar'
+
   const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
 
   const [bookingStep, setBookingStep] = useState('none');
@@ -232,13 +229,11 @@ export default function App() {
 
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
-  // --- 複雜預約邏輯：重疊檢測 + 員工數 + 清潔時間 + 當日禁止 ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
     
-    // 日期檢查 (雖然日曆已擋，雙重保險)
     const todayStr = getTodayString();
-    if (date <= todayStr) return true; // 當日或過去皆不可預約
+    if (date === todayStr) return true;
     
     const staffList = shopSettings.staff || [];
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
@@ -251,7 +246,7 @@ export default function App() {
       if (b.date !== date) return false;
       const startB = timeToMinutes(b.time);
       const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME;
-      return (startA < endB) && (startB < endA); // 交集判斷
+      return (startA < endB) && (startB < endA);
     });
 
     return concurrentBookings.length >= availableStaffCount;
@@ -261,7 +256,6 @@ export default function App() {
     return TIME_SLOTS.find(slot => !isTimeSlotFull(targetDate, slot)) || '';
   };
 
-  // 自動選時邏輯
   useEffect(() => {
     if (bookingStep === 'form' && bookingData.date) {
         if (!bookingData.time || isTimeSlotFull(bookingData.date, bookingData.time)) {
@@ -310,7 +304,6 @@ export default function App() {
     } catch (e) { alert('預約失敗'); } finally { setIsSubmitting(false); }
   };
 
-  // --- 商品上傳防呆 ---
   const handleItemSubmit = async (e) => {
     e.preventDefault();
     setIsUploading(true);
@@ -338,7 +331,6 @@ export default function App() {
     } catch (err) { alert("儲存失敗：" + err.message); } finally { setIsUploading(false); }
   };
 
-  // --- 雙重驗證查詢 ---
   const handleSearchBooking = (e) => {
     e.preventDefault();
     if(!searchName.trim() || !searchPhone.trim()) return;
@@ -682,17 +674,15 @@ export default function App() {
              )}
           </div>
         ) : activeTab === 'home' ? (
-          // 首頁 (Pure Art)
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
             <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
+            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">UNIWAWA</h2>
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
-          // 款式頁面
           <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
                 <div className="flex flex-wrap gap-4 justify-center items-center">
@@ -751,132 +741,162 @@ export default function App() {
               <button onClick={() => setIsBookingManagerOpen(false)}><X size={24}/></button>
             </div>
 
+            {/* 管理分頁按鈕 */}
+            <div className="flex border-b border-[#EAE7E2] px-8 bg-[#FAF9F6] sticky top-0 z-10">
+              {[
+                { id: 'addons', label: '加購品項', icon: <Tag size={14}/> },
+                { id: 'staff', label: '人員管理', icon: <Users size={14}/> },
+                { id: 'calendar', label: '休假與預約', icon: <Calendar size={14}/> }
+              ].map(tab => (
+                <button 
+                  key={tab.id}
+                  onClick={() => setManagerTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest transition-all ${managerTab === tab.id ? 'bg-white border-x border-t border-[#EAE7E2] border-b-white text-[#C29591] font-bold -mb-[1px]' : 'text-gray-400 hover:text-[#463E3E]'}`}
+                >
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
-              <section className="space-y-6">
-                <div className="border-l-4 border-[#C29591] pl-4">
-                  <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品設定 (指甲現況)</h4>
-                  <p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「延甲」等額外服務的金額與所需時間，顧客預約時可選。</p>
-                </div>
-                <form onSubmit={handleAddAddon} className="bg-[#FAF9F6] p-5 border border-[#EAE7E2] grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">名稱 (如：現場卸甲)</label>
-                    <input type="text" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="項目名稱" value={addonForm.name} onChange={e => setAddonForm({...addonForm, name: e.target.value})} />
+              
+              {/* --- 1. 加購品管理區塊 --- */}
+              {managerTab === 'addons' && (
+                <section className="space-y-6 fade-in">
+                  <div className="border-l-4 border-[#C29591] pl-4">
+                    <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品設定 (指甲現況)</h4>
+                    <p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「延甲」等額外服務的金額與所需時間，顧客預約時可選。</p>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">加價金額 (NT$)</label>
-                    <input type="number" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="0" value={addonForm.price} onChange={e => setAddonForm({...addonForm, price: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">所需時間 (分鐘)</label>
-                    <input type="number" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="0" value={addonForm.duration} onChange={e => setAddonForm({...addonForm, duration: e.target.value})} />
-                  </div>
-                  <button className="bg-[#463E3E] text-white py-2.5 text-[10px] tracking-widest uppercase hover:bg-[#C29591] transition-colors">新增項目</button>
-                </form>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {addons.map(addon => (
-                    <div key={addon.id} className="border border-[#EAE7E2] p-4 flex justify-between items-center bg-white shadow-sm hover:border-[#C29591] transition-colors">
-                      <div className="space-y-1">
-                        <div className="text-xs font-bold text-[#463E3E]">{addon.name}</div>
-                        <div className="text-[10px] text-gray-400">+ NT$ {addon.price} / + {addon.duration} 分鐘</div>
-                      </div>
-                      <button onClick={() => { if(confirm('確定刪除此加購項？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', addon.id)); }}>
-                        <Trash2 size={14} className="text-gray-300 hover:text-red-500 transition-colors"/>
-                      </button>
+                  {/* 新增加購品表單 */}
+                  <form onSubmit={handleAddAddon} className="bg-[#FAF9F6] p-5 border border-[#EAE7E2] grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div>
+                      <label className="text-[10px] text-gray-400 block mb-1">名稱 (如：現場卸甲)</label>
+                      <input type="text" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="項目名稱" value={addonForm.name} onChange={e => setAddonForm({...addonForm, name: e.target.value})} />
                     </div>
-                  ))}
-                  {addons.length === 0 && <p className="text-[10px] text-gray-300 col-span-full text-center py-4">目前沒有設定任何加購項目</p>}
-                </div>
-              </section>
-
-              <section className="space-y-6 pt-6 border-t border-dashed">
-                <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
-                  <div>
-                    <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">人員名單與請假</h4>
-                    <p className="text-[10px] text-gray-400 mt-1">設定美甲師名稱，系統會根據剩餘上班人數決定預約上限</p>
-                  </div>
-                  <button onClick={() => {
-                    const name = prompt("請輸入美甲師姓名：");
-                    if(name) saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, leaveDates: [] }] });
-                  }} className="text-[10px] bg-[#C29591] text-white px-4 py-2 rounded-full hover:bg-[#463E3E] transition-colors">+ 新增人員</button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(shopSettings.staff || []).map(staff => (
-                    <div key={staff.id} className="bg-[#FAF9F6] border border-[#EAE7E2] p-5 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold flex items-center gap-2"><Users size={14} className="text-[#C29591]"/> {staff.name}</span>
-                        <button onClick={() => {
-                          if(confirm(`確定刪除 ${staff.name}？`)) saveShopSettings({ ...shopSettings, staff: shopSettings.staff.filter(s => s.id !== staff.id) });
-                        }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
-                      </div>
-                      <div className="space-y-2 border-t pt-4">
-                        <label className="text-[10px] font-bold text-gray-400 flex items-center gap-1"><UserMinus size={12}/> 設定請假</label>
-                        <input type="date" className="text-[10px] border p-2 w-full outline-none focus:border-[#C29591]" onChange={(e) => {
-                          if(!e.target.value) return;
-                          const updatedStaff = shopSettings.staff.map(s => {
-                            if(s.id === staff.id) {
-                              const currentLeaves = s.leaveDates || [];
-                              return { ...s, leaveDates: currentLeaves.includes(e.target.value) ? currentLeaves : [...currentLeaves, e.target.value].sort() };
-                            }
-                            return s;
-                          });
-                          saveShopSettings({ ...shopSettings, staff: updatedStaff });
-                        }} />
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {(staff.leaveDates || []).map(d => (
-                            <span key={d} className="text-[9px] bg-red-50 text-red-500 px-2 py-1 flex items-center gap-1 rounded-sm border border-red-100">
-                              {d} <X size={10} className="cursor-pointer" onClick={() => {
-                                const updatedStaff = shopSettings.staff.map(s => {
-                                  if(s.id === staff.id) return { ...s, leaveDates: s.leaveDates.filter(ld => ld !== d) };
-                                  return s;
-                                });
-                                saveShopSettings({ ...shopSettings, staff: updatedStaff });
-                              }}/>
-                            </span>
-                          ))}
+                    <div>
+                      <label className="text-[10px] text-gray-400 block mb-1">加價金額 (NT$)</label>
+                      <input type="number" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="0" value={addonForm.price} onChange={e => setAddonForm({...addonForm, price: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 block mb-1">所需時間 (分鐘)</label>
+                      <input type="number" className="w-full border p-2 text-xs outline-none focus:border-[#C29591]" placeholder="0" value={addonForm.duration} onChange={e => setAddonForm({...addonForm, duration: e.target.value})} />
+                    </div>
+                    <button className="bg-[#463E3E] text-white py-2.5 text-[10px] tracking-widest uppercase hover:bg-[#C29591] transition-colors">新增項目</button>
+                  </form>
+                  {/* 現有加購品列表 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {addons.map(addon => (
+                      <div key={addon.id} className="border border-[#EAE7E2] p-4 flex justify-between items-center bg-white shadow-sm hover:border-[#C29591] transition-colors">
+                        <div className="space-y-1">
+                          <div className="text-xs font-bold text-[#463E3E]">{addon.name}</div>
+                          <div className="text-[10px] text-gray-400">+ NT$ {addon.price} / + {addon.duration} 分鐘</div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 border-t border-dashed pt-6">
-                <section className="space-y-6">
-                    <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">全店公休日設定</h4>
-                    <div className="flex gap-2">
-                      <input type="date" className="flex-1 p-2 border text-xs outline-none focus:border-[#C29591]" value={newHolidayInput} onChange={e => setNewHolidayInput(e.target.value)} />
-                      <button onClick={() => { if(!newHolidayInput) return; saveShopSettings({...shopSettings, specificHolidays: [...(shopSettings.specificHolidays || []), newHolidayInput].sort()}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px] hover:bg-[#C29591] transition-colors">新增</button>
-                    </div>
-                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-                      {(shopSettings.specificHolidays || []).map(date => (
-                        <span key={date} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex items-center gap-2">
-                          {date} <X size={12} className="cursor-pointer" onClick={() => saveShopSettings({...shopSettings, specificHolidays: shopSettings.specificHolidays.filter(d => d !== date)})} />
-                        </span>
-                      ))}
-                    </div>
-                </section>
-
-                <section className="space-y-6">
-                  <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">現有預約</h4>
-                  <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2">
-                    {allBookings.map(b => (
-                      <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6] text-[11px] hover:border-[#C29591] transition-colors">
-                        <div>
-                          <div className="font-bold text-sm">{b.date} {b.time}</div>
-                          <div>{b.name} • {b.phone}</div>
-                          <div className="text-[#C29591] mt-1">
-                            {b.itemTitle} 
-                            {b.addonName && b.addonName !== '無' ? <span className="text-[#463E3E]"> + {b.addonName}</span> : ''}
-                          </div>
-                          <div className="text-gray-400 mt-0.5">總額: NT${b.totalAmount}</div>
-                        </div>
-                        <button onClick={() => { if(confirm('確定取消此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)); }} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+                        <button onClick={() => { if(confirm('確定刪除此加購項？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', addon.id)); }}>
+                          <Trash2 size={14} className="text-gray-300 hover:text-red-500 transition-colors"/>
+                        </button>
                       </div>
                     ))}
-                    {allBookings.length === 0 && <p className="text-center text-gray-300 text-xs py-4">目前沒有預約</p>}
+                    {addons.length === 0 && <p className="text-[10px] text-gray-300 col-span-full text-center py-4">目前沒有設定任何加購項目</p>}
                   </div>
                 </section>
-              </div>
+              )}
+
+              {/* --- 2. 人員管理區塊 --- */}
+              {managerTab === 'staff' && (
+                <section className="space-y-6 fade-in">
+                  <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
+                    <div>
+                      <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">人員名單與請假</h4>
+                      <p className="text-[10px] text-gray-400 mt-1">設定美甲師名稱，系統會根據剩餘上班人數決定預約上限</p>
+                    </div>
+                    <button onClick={() => {
+                      const name = prompt("請輸入美甲師姓名：");
+                      if(name) saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, leaveDates: [] }] });
+                    }} className="text-[10px] bg-[#C29591] text-white px-4 py-2 rounded-full hover:bg-[#463E3E] transition-colors">+ 新增人員</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(shopSettings.staff || []).map(staff => (
+                      <div key={staff.id} className="bg-[#FAF9F6] border border-[#EAE7E2] p-5 space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold flex items-center gap-2"><Users size={14} className="text-[#C29591]"/> {staff.name}</span>
+                          <button onClick={() => {
+                            if(confirm(`確定刪除 ${staff.name}？`)) saveShopSettings({ ...shopSettings, staff: shopSettings.staff.filter(s => s.id !== staff.id) });
+                          }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
+                        </div>
+                        <div className="space-y-2 border-t pt-4">
+                          <label className="text-[10px] font-bold text-gray-400 flex items-center gap-1"><UserMinus size={12}/> 設定請假</label>
+                          <input type="date" className="text-[10px] border p-2 w-full outline-none focus:border-[#C29591]" onChange={(e) => {
+                            if(!e.target.value) return;
+                            const updatedStaff = shopSettings.staff.map(s => {
+                              if(s.id === staff.id) {
+                                const currentLeaves = s.leaveDates || [];
+                                return { ...s, leaveDates: currentLeaves.includes(e.target.value) ? currentLeaves : [...currentLeaves, e.target.value].sort() };
+                              }
+                              return s;
+                            });
+                            saveShopSettings({ ...shopSettings, staff: updatedStaff });
+                          }} />
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {(staff.leaveDates || []).map(d => (
+                              <span key={d} className="text-[9px] bg-red-50 text-red-500 px-2 py-1 flex items-center gap-1 rounded-sm border border-red-100">
+                                {d} <X size={10} className="cursor-pointer" onClick={() => {
+                                  const updatedStaff = shopSettings.staff.map(s => {
+                                    if(s.id === staff.id) return { ...s, leaveDates: s.leaveDates.filter(ld => ld !== d) };
+                                    return s;
+                                  });
+                                  saveShopSettings({ ...shopSettings, staff: updatedStaff });
+                                }}/>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* --- 3. 全店公休與預約清單 --- */}
+              {managerTab === 'calendar' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 fade-in">
+                  <section className="space-y-6">
+                      <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">全店公休日設定</h4>
+                      <div className="flex gap-2">
+                        <input type="date" className="flex-1 p-2 border text-xs outline-none focus:border-[#C29591]" value={newHolidayInput} onChange={e => setNewHolidayInput(e.target.value)} />
+                        <button onClick={() => { if(!newHolidayInput) return; saveShopSettings({...shopSettings, specificHolidays: [...(shopSettings.specificHolidays || []), newHolidayInput].sort()}); setNewHolidayInput(''); }} className="bg-[#463E3E] text-white px-4 text-[10px] hover:bg-[#C29591] transition-colors">新增</button>
+                      </div>
+                      <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                        {(shopSettings.specificHolidays || []).map(date => (
+                          <span key={date} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex items-center gap-2">
+                            {date} <X size={12} className="cursor-pointer" onClick={() => saveShopSettings({...shopSettings, specificHolidays: shopSettings.specificHolidays.filter(d => d !== date)})} />
+                          </span>
+                        ))}
+                      </div>
+                  </section>
+
+                  <section className="space-y-6">
+                    <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">現有預約</h4>
+                    <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2">
+                      {allBookings.map(b => (
+                        <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6] text-[11px] hover:border-[#C29591] transition-colors">
+                          <div>
+                            <div className="font-bold text-sm">{b.date} {b.time}</div>
+                            <div>{b.name} • {b.phone}</div>
+                            <div className="text-[#C29591] mt-1">
+                              {b.itemTitle} 
+                              {b.addonName && b.addonName !== '無' ? <span className="text-[#463E3E]"> + {b.addonName}</span> : ''}
+                            </div>
+                            <div className="text-gray-400 mt-0.5">總額: NT${b.totalAmount}</div>
+                          </div>
+                          <button onClick={() => { if(confirm('確定取消此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)); }} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+                        </div>
+                      ))}
+                      {allBookings.length === 0 && <p className="text-center text-gray-300 text-xs py-4">目前沒有預約</p>}
+                    </div>
+                  </section>
+                </div>
+              )}
             </div>
           </div>
         </div>
