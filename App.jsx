@@ -39,10 +39,10 @@ const timeToMinutes = (timeStr) => {
   return h * 60 + m;
 };
 
-// --- 子組件：款式卡片 (修改：加購必選邏輯) ---
+// --- 子組件：款式卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [localAddonId, setLocalAddonId] = useState(''); // 新增：本地狀態追蹤是否已選
+  const [localAddonId, setLocalAddonId] = useState('');
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
   const nextImg = (e) => {
@@ -57,7 +57,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
 
   const handleAddonChange = (e) => {
     const addonId = e.target.value;
-    setLocalAddonId(addonId); // 更新本地狀態
+    setLocalAddonId(addonId);
     const addon = addons.find(a => a.id === addonId);
     setSelectedAddon(addon || null);
   };
@@ -88,7 +88,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         <div className="flex items-center gap-1.5 text-gray-400 text-[10px] mb-4 uppercase tracking-widest font-light"><Clock size={12} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         
-        {/* 加購品下拉選單 (必選) */}
         <select 
           className={`w-full text-[11px] border py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E] transition-colors ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
           onChange={handleAddonChange}
@@ -103,7 +102,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         </select>
 
         <button 
-          disabled={!localAddonId} // 若未選擇則禁用
+          disabled={!localAddonId} 
           onClick={() => onBook(item)} 
           className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
@@ -175,7 +174,6 @@ export default function App() {
   const [shopSettings, setShopSettings] = useState({ specificHolidays: [], staff: [] });
   const [newHolidayInput, setNewHolidayInput] = useState('');
   
-  // 新增加購品輸入表單狀態
   const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
 
   const [bookingStep, setBookingStep] = useState('none');
@@ -206,7 +204,6 @@ export default function App() {
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), (s) => 
       setCloudItems(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
-    // 監聽加購品資料
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), (s) => 
       setAddons(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
@@ -251,13 +248,17 @@ export default function App() {
 
   const handleConfirmBooking = async () => {
     setIsSubmitting(true);
+    // 計算總價與總時長
+    const finalAmount = (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
+    const finalDuration = (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
+
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookingData,
         itemTitle: selectedItem?.title,
         addonName: selectedAddon?.name || '無',
-        totalAmount: (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0),
-        totalDuration: (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0),
+        totalAmount: finalAmount,
+        totalDuration: finalDuration,
         createdAt: serverTimestamp()
       });
       setBookingStep('success');
@@ -285,6 +286,10 @@ export default function App() {
     return matchStyle && matchPrice;
   });
 
+  // 計算邏輯函式 (用於 Form View 顯示)
+  const calcTotalAmount = () => (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
+  const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
+
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
@@ -309,6 +314,8 @@ export default function App() {
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
+            
+            {/* 預約資訊摘要卡片 - 包含加總計算 */}
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                    <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
@@ -318,24 +325,44 @@ export default function App() {
                     <p className="text-[10px] text-[#C29591] tracking-widest uppercase font-bold">預約項目</p>
                     <p className="text-sm font-medium">{selectedItem?.title} {selectedAddon ? `+ ${selectedAddon.name}` : ''}</p>
                     <p className="text-[10px] text-gray-400">
-                        預計時間: {(Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0)} 分鐘
+                        預計總時長: <span className="font-bold text-[#463E3E]">{calcTotalDuration()}</span> 分鐘
                     </p>
                    </div>
                    <div className="text-right">
-                      <p className="text-[10px] text-gray-400 tracking-widest uppercase">總金額</p>
-                      <p className="text-lg font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}</p>
+                      <p className="text-[10px] text-gray-400 tracking-widest uppercase">總金額 (含加購)</p>
+                      <p className="text-lg font-bold text-[#463E3E]">NT$ {calcTotalAmount().toLocaleString()}</p>
                    </div>
                 </div>
             </div>
+
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
-              {/* 修改：姓名電話必填檢查 */}
+              {/* 姓名與電話輸入區 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <input required type="text" placeholder="顧客姓名 (必填)" className="border-b py-2 outline-none" value={bookingData.name} onChange={e => setBookingData({...bookingData, name: e.target.value})} />
-                <input required type="tel" placeholder="聯絡電話 (必填)" className="border-b py-2 outline-none" value={bookingData.phone} onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
+                <input 
+                  required 
+                  type="text" 
+                  placeholder="顧客姓名 (必填)" 
+                  className={`border-b py-2 outline-none ${!bookingData.name.trim() ? 'border-red-100 focus:border-[#C29591]' : 'border-gray-200'}`}
+                  value={bookingData.name} 
+                  onChange={e => setBookingData({...bookingData, name: e.target.value})} 
+                />
+                <input 
+                  required 
+                  type="tel" 
+                  placeholder="聯絡電話 (必填10碼數字)" 
+                  className={`border-b py-2 outline-none ${bookingData.phone && bookingData.phone.length !== 10 ? 'border-red-300 text-red-500' : ''}`}
+                  value={bookingData.phone} 
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, ''); // 只允許數字
+                    if(val.length <= 10) setBookingData({...bookingData, phone: val});
+                  }} 
+                />
               </div>
+
               <div className="flex justify-center">
                 <CustomCalendar selectedDate={bookingData.date} onDateSelect={(d) => setBookingData({...bookingData, date: d, time: ''})} settings={shopSettings} />
               </div>
+              
               {bookingData.date && (
                 <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
                   {TIME_SLOTS.map(t => (
@@ -343,19 +370,21 @@ export default function App() {
                   ))}
                 </div>
               )}
-              {/* 修改：禁用條件增加姓名與電話檢查 */}
+
               <button 
-                disabled={isSubmitting || !bookingData.time || !bookingData.name.trim() || !bookingData.phone.trim()} 
+                disabled={isSubmitting || !bookingData.time || !bookingData.name.trim() || bookingData.phone.length !== 10} 
                 onClick={handleConfirmBooking} 
                 className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? '處理中...' : (!bookingData.name || !bookingData.phone) ? '請填寫姓名與電話' : !bookingData.time ? '請選擇時間' : '確認送出預約'}
+                {isSubmitting ? '處理中...' : 
+                 (!bookingData.name.trim()) ? '請填寫姓名' : 
+                 (bookingData.phone.length !== 10) ? '電話需為10碼數字' : 
+                 !bookingData.time ? '請選擇時間' : '確認送出預約'}
               </button>
             </div>
           </div>
         ) : bookingStep === 'success' ? (
           <div className="max-w-lg mx-auto py-12 px-6">
-            {/* 頂部圖標與標題 */}
             <div className="text-center mb-10">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#FAF9F6] mb-4">
                 <CheckCircle size={32} className="text-[#C29591]" />
@@ -364,16 +393,11 @@ export default function App() {
               <p className="text-[10px] text-gray-400 mt-2 tracking-widest">您的預約已成功送出，期待與您相見</p>
             </div>
 
-            {/* 預約詳情卡片 */}
             <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative">
-              {/* 頂部裝飾線 */}
               <div className="h-1 w-full bg-[#C29591]"></div>
-
-              {/* 產品圖片區域 */}
               {selectedItem?.images?.[0] && (
                 <div className="w-full h-56 relative bg-gray-50 group">
                   <img src={selectedItem.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="success" />
-                  {/* 圖片上的漸層文字 */}
                   <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-6">
                     <div className="text-white">
                       <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{selectedItem.category}</p>
@@ -383,9 +407,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* 詳細資訊列表 */}
               <div className="p-8">
-                {/* 核心時間顯示 (強調) */}
                 <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
                   <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
                   <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
@@ -395,7 +417,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 資料條目 */}
                 <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
                   <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
                     <span className="text-gray-400">顧客姓名</span>
@@ -417,7 +438,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 總金額區塊 */}
                 <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
                   <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
                   <div className="text-2xl font-bold text-[#C29591] leading-none">
@@ -428,7 +448,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 返回按鈕 */}
             <button 
               onClick={() => {setBookingStep('none'); setActiveTab('home');}} 
               className="w-full mt-8 bg-[#463E3E] text-white py-4 text-xs tracking-[0.2em] font-medium hover:bg-[#C29591] transition-all duration-300 shadow-lg shadow-gray-200 uppercase"
