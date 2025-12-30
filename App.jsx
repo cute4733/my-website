@@ -40,7 +40,7 @@ const timeToMinutes = (timeStr) => {
   return h * 60 + m;
 };
 
-// --- 子組件：款式卡片 (處理多圖輪播與圖示衝突修正) ---
+// --- 子組件：款式卡片 (徹底修正設定圖示消失問題) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
@@ -56,31 +56,48 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
   };
 
   return (
-    <div className="group flex flex-col bg-white border border-[#F0EDEA] shadow-sm">
-      <div className="aspect-[3/4] overflow-hidden relative group/img">
-        {/* 1. 圖片顯示層 (z-0) */}
+    <div className="group flex flex-col bg-white border border-[#F0EDEA] shadow-sm relative">
+      {/* 核心修正：將管理按鈕放在這層，完全避開圖片容器的 overflow-hidden */}
+      {isLoggedIn && (
+        <div className="absolute top-4 right-4 flex gap-2 z-[60]">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(item); }} 
+            className="p-2.5 bg-white/95 rounded-full text-blue-600 shadow-md hover:bg-white transition-all transform hover:scale-110 border border-blue-50"
+          >
+            <Edit3 size={16}/>
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} 
+            className="p-2.5 bg-white/95 rounded-full text-red-600 shadow-md hover:bg-white transition-all transform hover:scale-110 border border-red-50"
+          >
+            <Trash2 size={16}/>
+          </button>
+        </div>
+      )}
+
+      {/* 圖片區域 */}
+      <div className="aspect-[3/4] overflow-hidden relative">
         <img 
           src={images[currentIdx]} 
           className="w-full h-full object-cover transition-opacity duration-300" 
           alt={item.title} 
         />
         
-        {/* 2. 多圖切換箭頭 (z-10) */}
+        {/* 多圖切換按鈕 */}
         {images.length > 1 && (
           <>
             <button 
               onClick={prevImg} 
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
             >
               <ChevronLeft size={20} />
             </button>
             <button 
               onClick={nextImg} 
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/70 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
             >
               <ChevronRight size={20} />
             </button>
-            {/* 分頁點指示器 (z-10) */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {images.map((_, i) => (
                 <div 
@@ -91,26 +108,9 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
             </div>
           </>
         )}
-
-        {/* 3. 設定圖示 (z-20 確保最高且不消失) */}
-        {isLoggedIn && (
-          <div className="absolute top-4 right-4 flex gap-2 z-20">
-            <button 
-              onClick={(e) => { e.stopPropagation(); onEdit(item); }} 
-              className="p-2 bg-white/90 rounded-full text-blue-600 shadow-sm hover:bg-white transition-colors"
-            >
-              <Edit3 size={16}/>
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} 
-              className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:bg-white transition-colors"
-            >
-              <Trash2 size={16}/>
-            </button>
-          </div>
-        )}
       </div>
 
+      {/* 資訊區域 */}
       <div className="p-8 flex flex-col items-center text-center">
         <span className="text-[10px] text-[#C29591] tracking-[0.4em] uppercase mb-2 font-medium">{item.category}</span>
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
@@ -268,7 +268,7 @@ export default function App() {
         createdAt: serverTimestamp()
       });
       setBookingStep('success');
-    } catch (e) { alert('預預約失敗'); } finally { setIsSubmitting(false); }
+    } catch (e) { alert('預約失敗'); } finally { setIsSubmitting(false); }
   };
 
   const handleItemSubmit = async (e) => {
