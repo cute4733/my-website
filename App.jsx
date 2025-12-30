@@ -106,18 +106,20 @@ export default function App() {
       <main className="pt-20">
         {activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
-            <span className="text-[#C29591] tracking-[0.6em] text-[10px] mb-8 uppercase font-light">Est. 2025 • Taipei</span>
-            <div className="w-full max-w-2xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
+            {/* 更新後的標語：字體與主標題相同，並放大 */}
+            <span className="text-[#C29591] tracking-[0.8em] text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
+            
+            {/* 縮小後的首頁圖片：max-w-md */}
+            <div className="w-full max-w-md mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto object-cover" alt="Banner" />
             </div>
+            
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Beyond<br/>Expectation</h2>
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 hover:bg-[#C29591] transition-all tracking-[0.4em] text-xs shadow-xl font-light">進入作品集</button>
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 py-12">
-            {/* 篩選按鈕區 (包含價位分類) */}
             <div className="flex flex-col md:flex-row items-center justify-center gap-12 mb-20 border-b pb-12 border-[#EAE7E2]">
-              {/* 風格分類 */}
               <div className="flex flex-col items-center gap-4">
                 <span className="text-[10px] tracking-[0.3em] text-gray-400 font-bold uppercase">Style / 風格</span>
                 <div className="flex flex-wrap justify-center gap-3">
@@ -126,7 +128,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              {/* 價位分類 */}
               <div className="flex flex-col items-center gap-4">
                 <span className="text-[10px] tracking-[0.3em] text-gray-400 font-bold uppercase">Price / 預算</span>
                 <div className="flex flex-wrap justify-center gap-3">
@@ -137,7 +138,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 商品網格 */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
               {filteredItems.map(item => (
                 <div key={item.id} className="group flex flex-col bg-white border border-[#F0EDEA] shadow-sm">
@@ -150,41 +150,23 @@ export default function App() {
                       </div>
                     )}
                   </div>
-
                   <div className="p-8 flex flex-col items-center text-center">
                     <span className="text-[10px] text-[#C29591] tracking-[0.4em] uppercase mb-2 font-medium">{item.category}</span>
                     <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-2">{item.title}</h3>
-                    
-                    <div className="flex items-center gap-1.5 text-gray-400 text-[11px] mb-4">
-                      <Clock size={13} />
-                      <span>預計：{item.duration || '90'} 分鐘</span>
-                    </div>
-
-                    <p className="text-[#463E3E] font-bold text-xl mb-8">
-                      <span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}
-                    </p>
-                    
-                    {/* 加購選單區 (文字已更改為 純卸甲) */}
+                    <div className="flex items-center gap-1.5 text-gray-400 text-[11px] mb-4"><Clock size={13} /><span>預計：{item.duration || '90'} 分鐘</span></div>
+                    <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
                     <div className="w-full mb-8 text-left">
                       <label className="text-[9px] text-gray-400 tracking-[0.2em] uppercase mb-2 block ml-1 font-bold">服務加購 / 選項</label>
-                      <select 
-                        required 
-                        className="w-full text-[11px] border border-[#EAE7E2] py-3 px-4 bg-[#FAF9F6] outline-none"
-                        defaultValue=""
-                      >
+                      <select required className="w-full text-[11px] border border-[#EAE7E2] py-3 px-4 bg-[#FAF9F6] outline-none" defaultValue="">
                         <option value="" disabled>請選擇您的指甲現況</option>
                         <option value="none">不加購（純卸甲）</option>
                         {addons.map(a => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} (+${a.price} / {a.duration}分)
-                          </option>
+                          <option key={a.id} value={a.id}>{a.name} (+${a.price} / {a.duration}分)</option>
                         ))}
                       </select>
                     </div>
-
                     <a href="https://lin.ee/Nes3ZBI" target="_blank" rel="noopener noreferrer" className="bg-[#06C755] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full flex justify-center items-center gap-2 hover:bg-[#05b34c] transition-colors">
-                      <MessageCircle size={16} fill="white" />
-                      立即 LINE 預約諮詢
+                      <MessageCircle size={16} fill="white" />立即 LINE 預約諮詢
                     </a>
                   </div>
                 </div>
@@ -194,7 +176,7 @@ export default function App() {
         )}
       </main>
 
-      {/* --- 後台彈窗省略部分保持與前次一致 --- */}
+      {/* --- Modals 區塊保持不變 --- */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white p-10 max-w-sm w-full shadow-2xl rounded-sm">
@@ -206,8 +188,6 @@ export default function App() {
           </div>
         </div>
       )}
-      
-      {/* 為了確保代碼完整可編譯，補上其餘 Modal 控制 */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full shadow-2xl">
@@ -224,10 +204,33 @@ export default function App() {
               <select className="w-full border-b py-2 bg-transparent" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
                 {STYLE_CATEGORIES.filter(c => c !== '全部').map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              {!editingItem && <input type="file" multiple className="text-[10px]" onChange={(e) => {
+                Array.from(e.target.files).forEach(file => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => setFormData(prev => ({...prev, images: [...prev.images, reader.result]}));
+                  reader.readAsDataURL(file);
+                });
+              }} />}
               <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 tracking-widest text-xs">
                 {isUploading ? '正在儲存...' : '確認發布'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {isAddonManagerOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white p-8 max-w-md w-full shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-8 border-b pb-4"><h3 className="tracking-widest font-light">加購服務管理</h3><button onClick={() => setIsAddonManagerOpen(false)}><X size={20}/></button></div>
+            <div className="bg-[#FAF9F6] p-6 rounded-sm mb-8 space-y-4">
+              <input type="text" placeholder="服務名稱" className="w-full border-b bg-transparent py-2 text-sm outline-none" value={newAddon.name} onChange={e => setNewAddon({...newAddon, name: e.target.value})} />
+              <div className="flex gap-4">
+                <input type="number" placeholder="加購價" className="w-1/2 border-b bg-transparent py-2 text-sm outline-none" value={newAddon.price} onChange={e => setNewAddon({...newAddon, price: e.target.value})} />
+                <input type="number" placeholder="時長" className="w-1/2 border-b bg-transparent py-2 text-sm outline-none" value={newAddon.duration} onChange={e => setNewAddon({...newAddon, duration: e.target.value})} />
+              </div>
+              <button onClick={handleAddAddon} className="w-full bg-[#C29591] text-white py-3 text-xs tracking-widest">新增項目</button>
+            </div>
+            <div className="divide-y border-t">{addons.map(a => (<div key={a.id} className="py-4 flex justify-between items-center"><div className="flex flex-col"><span className="text-sm">{a.name}</span><span className="text-[10px] text-gray-400">+${a.price} / {a.duration}min</span></div><button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', a.id))} className="text-red-300"><Trash2 size={16}/></button></div>))}</div>
           </div>
         </div>
       )}
