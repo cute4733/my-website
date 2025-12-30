@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, MessageCircle, Settings, Clock, Calendar as CalendarIcon, User, Phone, CheckCircle, List, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -200,7 +200,6 @@ export default function App() {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookingData,
         itemTitle: selectedItem?.title,
-        itemImage: selectedItem?.images?.[0] || '', // 額外儲存圖片網址方便後台查看
         addonName: selectedAddon?.name || '無',
         totalAmount: (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0),
         totalDuration: totalDur,
@@ -264,27 +263,20 @@ export default function App() {
       </nav>
 
       <main className="pt-20">
-        {/* ===================== 修改處：預約資訊填寫頁面 ===================== */}
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
-            
-            {/* 預約摘要 - 加入圖片顯示 */}
-            <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm flex flex-col sm:flex-row gap-6">
-              <div className="w-full sm:w-28 h-36 sm:h-28 bg-gray-50 flex-shrink-0">
-                {selectedItem?.images?.[0] ? (
-                  <img src={selectedItem.images[0]} className="w-full h-full object-cover rounded-sm" alt="selected" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-200"><ImageIcon size={24}/></div>
-                )}
-              </div>
-              <div className="flex-1">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 h-full">
-                  <div className="space-y-1">
+            <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                   {/* 注入：圖片顯示 */}
+                   <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
+                      {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="preview" />}
+                   </div>
+                   <div className="flex-1 space-y-1">
                     <p className="text-[10px] text-[#C29591] tracking-widest uppercase font-bold">預約項目</p>
-                    <p className="text-sm font-medium">{selectedItem?.title} <span className="text-gray-300 mx-1">/</span> {selectedAddon?.name || '無附加項目'}</p>
-                  </div>
-                  <div className="flex gap-8 text-right">
+                    <p className="text-sm font-medium">{selectedItem?.title} + {selectedAddon?.name || '無附加項目'}</p>
+                   </div>
+                   <div className="flex gap-8 text-right">
                     <div>
                       <p className="text-[10px] text-gray-400 tracking-widest uppercase">總時長</p>
                       <p className="text-lg font-light flex items-center justify-end gap-1">
@@ -298,7 +290,6 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              </div>
             </div>
 
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
@@ -342,7 +333,6 @@ export default function App() {
               <button onClick={() => setBookingStep('none')} className="w-full text-center text-[10px] text-gray-400 uppercase tracking-widest">返回重新選擇</button>
             </div>
           </div>
-        /* ===================== 修改處：預約成功畫面 ===================== */
         ) : bookingStep === 'success' ? (
           <div className="max-w-md mx-auto py-20 px-6 animate-in fade-in zoom-in duration-500">
             <div className="text-center mb-10">
@@ -351,15 +341,11 @@ export default function App() {
               <p className="text-xs text-gray-400 mt-2 tracking-widest uppercase font-light">Your appointment has been received</p>
             </div>
             <div className="bg-white border border-[#EAE7E2] shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-[#463E3E] text-white text-[8px] px-3 py-1 tracking-[0.2em] uppercase z-10">Official Receipt</div>
+              <div className="absolute top-0 right-0 bg-[#463E3E] text-white text-[8px] px-3 py-1 tracking-[0.2em] uppercase">Official Receipt</div>
               
-              {/* 成功畫面加入商品大圖 */}
-              <div className="w-full h-48 bg-gray-100 overflow-hidden">
-                {selectedItem?.images?.[0] ? (
-                  <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="done" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={32}/></div>
-                )}
+              {/* 注入：圖片顯示 */}
+              <div className="w-full h-48 bg-gray-50">
+                {selectedItem?.images?.[0] && <img src={selectedItem.images[0]} className="w-full h-full object-cover" alt="nail" />}
               </div>
 
               <div className="p-8 space-y-6">
@@ -455,16 +441,10 @@ export default function App() {
                 <div className="space-y-3">
                   {allBookings.map(b => (
                     <div key={b.id} className="border p-4 bg-[#FAF9F6] text-xs flex justify-between items-center">
-                      <div className="flex gap-4 items-center">
-                        {/* 後台也顯示縮圖 */}
-                        <div className="w-12 h-12 bg-gray-200 flex-shrink-0 overflow-hidden rounded-sm">
-                          {b.itemImage ? <img src={b.itemImage} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-400"><ImageIcon size={14}/></div>}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="font-bold text-sm">{b.date} {b.time} — {b.name}</div>
-                          <div className="text-[#C29591]">{b.itemTitle} / {b.addonName}</div>
-                          <div className="text-gray-400">{b.phone} | {b.totalDuration}min | NT${b.totalAmount}</div>
-                        </div>
+                      <div className="space-y-1">
+                        <div className="font-bold text-sm">{b.date} {b.time} — {b.name}</div>
+                        <div className="text-[#C29591]">{b.itemTitle} / {b.addonName}</div>
+                        <div className="text-gray-400">{b.phone} | {b.totalDuration}min | NT${b.totalAmount}</div>
                       </div>
                       <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id))} className="text-red-300 hover:text-red-500"><Trash2 size={18}/></button>
                     </div>
