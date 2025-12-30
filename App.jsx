@@ -121,7 +121,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   );
 };
 
-// --- 子組件：前台預約月曆 ---
+// --- 子組件：前台預約月曆 (UI修正版) ---
 const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -133,7 +133,8 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
 
   const renderDays = () => {
     const days = [];
-    for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="h-10 w-10"></div>);
+    // 修改：使用 aspect-square 確保格子是正方形，不使用固定高度
+    for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const isShopHoliday = (settings?.specificHolidays || []).includes(dateStr);
@@ -146,8 +147,8 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
 
       days.push(
         <button key={d} disabled={isDisabled} onClick={() => onDateSelect(dateStr)}
-          className={`h-10 w-10 text-[11px] rounded-full flex items-center justify-center transition-all 
-          ${isDisabled ? 'text-gray-200 line-through cursor-not-allowed' : isSelected ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>
+          className={`w-full aspect-square text-sm rounded-full flex items-center justify-center transition-all 
+          ${isDisabled ? 'text-gray-300 line-through cursor-not-allowed' : isSelected ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>
           {d}
         </button>
       );
@@ -156,23 +157,24 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   };
 
   return (
-    <div className="w-full max-w-[320px] bg-white border border-[#EAE7E2] p-4 shadow-sm">
-      <div className="flex justify-between items-center mb-4 px-2">
-        <h4 className="text-xs font-bold tracking-widest text-[#463E3E]">{currentYear}年 {currentMonth + 1}月</h4>
-        <div className="flex gap-1">
-          <button onClick={() => setViewDate(new Date(currentYear, currentMonth - 1, 1))}><ChevronLeft size={16}/></button>
-          <button onClick={() => setViewDate(new Date(currentYear, currentMonth + 1, 1))}><ChevronRight size={16}/></button>
+    // 修改：max-w-md 讓寬度更寬，p-6 增加間距
+    <div className="w-full max-w-md bg-white border border-[#EAE7E2] p-6 shadow-sm mx-auto">
+      <div className="flex justify-between items-center mb-6 px-2">
+        <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">{currentYear}年 {currentMonth + 1}月</h4>
+        <div className="flex gap-2">
+          <button onClick={() => setViewDate(new Date(currentYear, currentMonth - 1, 1))}><ChevronLeft size={18}/></button>
+          <button onClick={() => setViewDate(new Date(currentYear, currentMonth + 1, 1))}><ChevronRight size={18}/></button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {WEEKDAYS.map(w => <div key={w} className="h-10 w-10 flex items-center justify-center text-[10px] text-gray-400 font-bold">{w}</div>)}
+      <div className="grid grid-cols-7 gap-2 mb-2">
+        {WEEKDAYS.map(w => <div key={w} className="w-full aspect-square flex items-center justify-center text-xs text-gray-400 font-bold">{w}</div>)}
       </div>
-      <div className="grid grid-cols-7 gap-1">{renderDays()}</div>
+      <div className="grid grid-cols-7 gap-2">{renderDays()}</div>
     </div>
   );
 };
 
-// --- 新增：後台管理月曆 (AdminBookingCalendar) ---
+// --- 子組件：後台管理月曆 (UI修正版) ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -182,7 +184,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 
   const renderDays = () => {
     const days = [];
-    for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="h-12 w-12"></div>);
+    for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const hasBooking = bookings.some(b => b.date === dateStr);
@@ -190,7 +192,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 
       days.push(
         <button key={d} onClick={() => onDateSelect(dateStr)}
-          className={`h-12 w-12 text-xs rounded-lg flex flex-col items-center justify-center gap-1 transition-all border
+          className={`w-full aspect-square text-xs rounded-lg flex flex-col items-center justify-center gap-1 transition-all border
           ${isSelected ? 'border-[#C29591] bg-[#FAF9F6] text-[#C29591] font-bold' : 'border-transparent hover:bg-gray-50'}`}>
           <span>{d}</span>
           {hasBooking && <span className="w-1.5 h-1.5 rounded-full bg-[#C29591]"></span>}
@@ -412,12 +414,10 @@ export default function App() {
     bookingData.phone.length === 10 && 
     bookingData.time !== '';
 
-  // --- 後台預約清單排序邏輯 (日期 ASC) ---
   const sortedAdminBookings = [...allBookings].sort((a, b) => {
     return new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`);
   });
 
-  // --- 後台預約過濾邏輯 (月曆模式) ---
   const filteredAdminBookings = adminSelectedDate 
     ? sortedAdminBookings.filter(b => b.date === adminSelectedDate)
     : sortedAdminBookings;
@@ -931,7 +931,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* --- 3. 預約管理區塊 (新增列表/月曆切換) --- */}
+              {/* --- 3. 預約管理區塊 (列表/月曆切換) --- */}
               {managerTab === 'bookings' && (
                 <section className="space-y-6 fade-in h-full flex flex-col">
                   <div className="flex justify-between items-center border-b border-dashed pb-4">
