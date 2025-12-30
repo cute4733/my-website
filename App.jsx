@@ -39,9 +39,10 @@ const timeToMinutes = (timeStr) => {
   return h * 60 + m;
 };
 
-// --- 子組件：款式卡片 ---
+// --- 子組件：款式卡片 (修改：加購必選邏輯) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [localAddonId, setLocalAddonId] = useState(''); // 新增：本地狀態追蹤是否已選
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
   const nextImg = (e) => {
@@ -56,6 +57,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
 
   const handleAddonChange = (e) => {
     const addonId = e.target.value;
+    setLocalAddonId(addonId); // 更新本地狀態
     const addon = addons.find(a => a.id === addonId);
     setSelectedAddon(addon || null);
   };
@@ -86,9 +88,13 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         <div className="flex items-center gap-1.5 text-gray-400 text-[10px] mb-4 uppercase tracking-widest font-light"><Clock size={12} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-8"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         
-        {/* 加購品下拉選單 */}
-        <select className="w-full text-[11px] border border-[#EAE7E2] py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E]" onChange={handleAddonChange}>
-          <option value="">請選擇指甲現況 (非必選)</option>
+        {/* 加購品下拉選單 (必選) */}
+        <select 
+          className={`w-full text-[11px] border py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E] transition-colors ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
+          onChange={handleAddonChange}
+          value={localAddonId}
+        >
+          <option value="">請選擇指甲現況 (必選)</option>
           {addons.map(a => (
             <option key={a.id} value={a.id}>
               {a.name} (+${a.price} / +{a.duration}分)
@@ -96,7 +102,13 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
           ))}
         </select>
 
-        <button onClick={() => onBook(item)} className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors">點此預約</button>
+        <button 
+          disabled={!localAddonId} // 若未選擇則禁用
+          onClick={() => onBook(item)} 
+          className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          {!localAddonId ? '請先選擇現況' : '點此預約'}
+        </button>
       </div>
     </div>
   );
@@ -316,9 +328,10 @@ export default function App() {
                 </div>
             </div>
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
+              {/* 修改：姓名電話必填檢查 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <input type="text" placeholder="顧客姓名" className="border-b py-2 outline-none" onChange={e => setBookingData({...bookingData, name: e.target.value})} />
-                <input type="tel" placeholder="聯絡電話" className="border-b py-2 outline-none" onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
+                <input required type="text" placeholder="顧客姓名 (必填)" className="border-b py-2 outline-none" value={bookingData.name} onChange={e => setBookingData({...bookingData, name: e.target.value})} />
+                <input required type="tel" placeholder="聯絡電話 (必填)" className="border-b py-2 outline-none" value={bookingData.phone} onChange={e => setBookingData({...bookingData, phone: e.target.value})} />
               </div>
               <div className="flex justify-center">
                 <CustomCalendar selectedDate={bookingData.date} onDateSelect={(d) => setBookingData({...bookingData, date: d, time: ''})} settings={shopSettings} />
@@ -330,7 +343,14 @@ export default function App() {
                   ))}
                 </div>
               )}
-              <button disabled={isSubmitting || !bookingData.time} onClick={handleConfirmBooking} className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase">{isSubmitting ? '處理中...' : '確認送出預約'}</button>
+              {/* 修改：禁用條件增加姓名與電話檢查 */}
+              <button 
+                disabled={isSubmitting || !bookingData.time || !bookingData.name.trim() || !bookingData.phone.trim()} 
+                onClick={handleConfirmBooking} 
+                className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? '處理中...' : (!bookingData.name || !bookingData.phone) ? '請填寫姓名與電話' : !bookingData.time ? '請選擇時間' : '確認送出預約'}
+              </button>
             </div>
           </div>
         ) : bookingStep === 'success' ? (
