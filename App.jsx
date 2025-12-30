@@ -292,17 +292,64 @@ export default function App() {
             </div>
           </div>
         ) : bookingStep === 'success' ? (
-          <div className="max-w-md mx-auto py-20 px-6 text-center">
-            <CheckCircle size={56} className="text-[#C29591] mx-auto mb-4" />
-            <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E]">預約成功</h2>
-            <p className="text-xs text-gray-400 mt-2 tracking-widest uppercase mb-10">Your appointment has been received</p>
-            <div className="bg-white border border-[#EAE7E2] shadow-xl p-8 space-y-4 text-left">
-              <p className="text-sm">姓名：{bookingData.name}</p>
-              <p className="text-sm">時間：{bookingData.date} {bookingData.time}</p>
-              <p className="text-sm">金額：NT${((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}</p>
-              <p className="text-[9px] text-gray-400 text-center pt-4 border-t">請截圖此畫面並準時抵達</p>
+          /* 預約成功 - 收據風格版本 */
+          <div className="max-w-md mx-auto py-20 px-6 animate-in fade-in zoom-in duration-500">
+            <div className="text-center mb-10">
+              <CheckCircle size={56} className="text-[#C29591] mx-auto mb-4" />
+              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E]">預約成功</h2>
+              <p className="text-xs text-gray-400 mt-2 tracking-widest uppercase font-light">Your appointment has been received</p>
             </div>
-            <button onClick={() => {setBookingStep('none'); setActiveTab('home');}} className="w-full mt-10 border border-[#EAE7E2] py-4 text-[10px] tracking-[0.4em] uppercase">Back to Home</button>
+
+            <div className="bg-white border border-[#EAE7E2] shadow-xl p-8 space-y-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-[#463E3E] text-white text-[8px] px-3 py-1 tracking-[0.2em] uppercase">Official Receipt</div>
+              
+              <div className="border-b border-dashed pb-4">
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">Reservation Details</p>
+                <div className="flex justify-between items-baseline">
+                  <h3 className="text-lg font-medium text-[#463E3E]">{bookingData.name} 先生/小姐</h3>
+                  <span className="text-xs font-mono text-gray-400">{bookingData.phone}</span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400 font-light">預約日期 Date</span>
+                  <span className="text-[#463E3E]">{bookingData.date}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400 font-light">預約時間 Time</span>
+                  <span className="text-[#463E3E] font-bold">{bookingData.time}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400 font-light">選擇款式 Style</span>
+                  <span className="text-[#463E3E]">{selectedItem?.title}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400 font-light">附加服務 Add-on</span>
+                  <span className="text-[#463E3E]">{selectedAddon?.name || '無'}</span>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-[#FAF9F6] flex justify-between items-end">
+                <div>
+                  <span className="text-[10px] text-gray-400 block uppercase">Total Time</span>
+                  <span className="text-sm font-light">{(Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0)} mins</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-[#C29591] block uppercase font-bold tracking-tighter">Amount Due</span>
+                  <span className="text-2xl font-bold text-[#463E3E]">NT$ {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <p className="text-[9px] text-center text-gray-300 tracking-widest uppercase pt-4">請截圖此畫面並於預約時間準時抵達</p>
+            </div>
+
+            <button 
+              onClick={() => {setBookingStep('none'); setActiveTab('home');}} 
+              className="w-full mt-10 border border-[#EAE7E2] py-4 text-[10px] tracking-[0.4em] uppercase hover:bg-[#463E3E] hover:text-white transition-all"
+            >
+              Back to Home
+            </button>
           </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
@@ -332,7 +379,7 @@ export default function App() {
                     <span className="text-[10px] text-[#C29591] tracking-[0.4em] uppercase mb-2 font-medium">{item.category}</span>
                     <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
                     
-                    {/* 恢復服務時間顯示 */}
+                    {/* 服務時間顯示 */}
                     <div className="flex items-center gap-1.5 text-gray-400 text-[10px] mb-4 uppercase tracking-widest font-light">
                       <Clock size={12} />
                       預計服務：{item.duration || '90'} 分鐘
