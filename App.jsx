@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -21,8 +21,9 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const CLEANING_TIME = 20;
+const CLEANING_TIME = 20; // 清潔緩衝時間
 
+// 時間範圍 12:00 - 19:00
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 19; h++) {
@@ -121,7 +122,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   );
 };
 
-// --- 子組件：前台預約月曆 (UI修正版) ---
+// --- 子組件：前台預約月曆 ---
 const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -133,7 +134,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
 
   const renderDays = () => {
     const days = [];
-    // 修改：使用 aspect-square 確保格子是正方形，不使用固定高度
     for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -157,7 +157,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   };
 
   return (
-    // 修改：max-w-md 讓寬度更寬，p-6 增加間距
     <div className="w-full max-w-md bg-white border border-[#EAE7E2] p-6 shadow-sm mx-auto">
       <div className="flex justify-between items-center mb-6 px-2">
         <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">{currentYear}年 {currentMonth + 1}月</h4>
@@ -174,7 +173,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings }) => {
   );
 };
 
-// --- 子組件：後台管理月曆 (UI修正版) ---
+// --- 子組件：後台管理月曆 ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -230,8 +229,8 @@ export default function App() {
   const [newHolidayInput, setNewHolidayInput] = useState('');
   
   // 管理中心狀態
-  const [managerTab, setManagerTab] = useState('addons'); // 'addons' | 'staff_holiday' | 'bookings'
-  const [bookingViewMode, setBookingViewMode] = useState('list'); // 'list' | 'calendar'
+  const [managerTab, setManagerTab] = useState('addons'); 
+  const [bookingViewMode, setBookingViewMode] = useState('list'); 
   const [adminSelectedDate, setAdminSelectedDate] = useState('');
 
   const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
@@ -421,6 +420,36 @@ export default function App() {
   const filteredAdminBookings = adminSelectedDate 
     ? sortedAdminBookings.filter(b => b.date === adminSelectedDate)
     : sortedAdminBookings;
+
+  // --- 新增：匯出 CSV 功能 ---
+  const handleExportCSV = () => {
+    // 1. 定義標題
+    const headers = ['日期', '時間', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長'];
+    // 2. 轉換資料內容
+    const rows = sortedAdminBookings.map(b => [
+      b.date,
+      b.time,
+      b.name,
+      b.phone,
+      b.itemTitle,
+      b.addonName,
+      b.totalAmount,
+      b.totalDuration
+    ]);
+    // 3. 組合 CSV 字串
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+    // 4. 建立下載連結 (加入 BOM \uFEFF 以支援中文)
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `預約清單_${getTodayString()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
@@ -931,7 +960,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* --- 3. 預約管理區塊 (列表/月曆切換) --- */}
+              {/* --- 3. 預約管理區塊 (列表/月曆切換 + 匯出功能) --- */}
               {managerTab === 'bookings' && (
                 <section className="space-y-6 fade-in h-full flex flex-col">
                   <div className="flex justify-between items-center border-b border-dashed pb-4">
@@ -948,6 +977,12 @@ export default function App() {
                         onClick={() => { setBookingViewMode('calendar'); setAdminSelectedDate(getTodayString()); }}
                         className={`p-2 rounded ${bookingViewMode === 'calendar' ? 'bg-white shadow text-[#C29591]' : 'text-gray-400'}`}
                       ><Grid size={16}/></button>
+                      {/* 新增下載按鈕 */}
+                      <button 
+                        onClick={handleExportCSV}
+                        className="p-2 rounded text-gray-400 hover:bg-white hover:text-[#C29591] transition-colors"
+                        title="匯出預約清單"
+                      ><Download size={16}/></button>
                     </div>
                   </div>
 
