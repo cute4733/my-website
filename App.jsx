@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -121,7 +121,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   );
 };
 
-// --- 子組件：前台預約月曆 (支援門市過濾) ---
+// --- 子組件：前台預約月曆 ---
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -137,19 +137,17 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
-      // 判斷該門市是否公休
       const isGlobalHoliday = (settings?.holidays || []).some(h => h.date === dateStr && h.storeId === 'all');
       const isStoreHoliday = (settings?.holidays || []).some(h => h.date === dateStr && h.storeId === selectedStoreId);
       const isHoliday = isGlobalHoliday || isStoreHoliday;
 
-      // 判斷該門市員工是否全請假
       const staffList = (settings?.staff || []).filter(s => s.storeId === selectedStoreId);
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
       
       const isPastOrToday = new Date(currentYear, currentMonth, d) <= today;
       
-      const isDisabled = isHoliday || isAllOnLeave || isPastOrToday || !selectedStoreId; // 若未選門市也禁用
+      const isDisabled = isHoliday || isAllOnLeave || isPastOrToday || !selectedStoreId;
       const isSelected = selectedDate === dateStr;
 
       days.push(
@@ -180,7 +178,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
   );
 };
 
-// --- 子組件：後台管理月曆 ---
+// --- 子組件：後台管理月曆 (接收已過濾的預約) ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -193,7 +191,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
     for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const hasBooking = bookings.some(b => b.date === dateStr);
+      const hasBooking = bookings.some(b => b.date === dateStr); // 只顯示目前篩選清單中的預約
       const isSelected = selectedDate === dateStr;
 
       days.push(
@@ -232,15 +230,15 @@ export default function App() {
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
-  // shopSettings 結構更新: { stores: [], staff: [], holidays: [] }
   const [shopSettings, setShopSettings] = useState({ stores: [], staff: [], holidays: [] });
   const [newHolidayInput, setNewHolidayInput] = useState({ date: '', storeId: 'all' });
   const [newStoreInput, setNewStoreInput] = useState('');
   
   // 管理中心狀態
-  const [managerTab, setManagerTab] = useState('stores'); // 'stores' | 'addons' | 'staff_holiday' | 'bookings'
+  const [managerTab, setManagerTab] = useState('stores'); 
   const [bookingViewMode, setBookingViewMode] = useState('list'); 
   const [adminSelectedDate, setAdminSelectedDate] = useState('');
+  const [adminSelectedStore, setAdminSelectedStore] = useState('all'); // 新增：後台門市篩選狀態
 
   const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
 
@@ -273,7 +271,6 @@ export default function App() {
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings'), (d) => {
       if (d.exists()) {
         const data = d.data();
-        // 兼容舊資料結構
         setShopSettings({
           stores: data.stores || [],
           staff: data.staff || [],
@@ -300,21 +297,19 @@ export default function App() {
     const todayStr = getTodayString();
     if (date === todayStr) return true;
     
-    // 篩選該門市員工
     const staffList = (shopSettings.staff || []).filter(s => s.storeId === bookingData.storeId);
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
-    // 若該店無員工，則容量為 0 (不可預約)
-    const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 0;
+    // 修正：若該店無員工設定，預設容量為 1，避免完全鎖死
+    const availableStaffCount = staffList.length === 0 ? 1 : (staffList.length - onLeaveCount);
 
     if (availableStaffCount <= 0) return true;
 
     const startA = timeToMinutes(checkTimeStr);
     const endA = startA + calcTotalDuration() + CLEANING_TIME;
 
-    // 篩選該門市的預約
     const concurrentBookings = allBookings.filter(b => {
       if (b.date !== date) return false;
-      if (b.storeId !== bookingData.storeId) return false; // 不同店不影響
+      if (b.storeId !== bookingData.storeId) return false;
       
       const startB = timeToMinutes(b.time);
       const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME;
@@ -337,7 +332,7 @@ export default function App() {
             }
         }
     }
-  }, [bookingStep, bookingData.date, allBookings, bookingData.storeId]); // 加入 storeId 依賴
+  }, [bookingStep, bookingData.date, allBookings, bookingData.storeId]);
 
   const saveShopSettings = async (newSettings) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
@@ -438,19 +433,28 @@ export default function App() {
     !isNameInvalid &&
     bookingData.phone.length === 10 && 
     bookingData.time !== '' &&
-    bookingData.storeId !== ''; // 必須選擇門市
+    bookingData.storeId !== '';
 
+  // --- 後台資料處理邏輯 (排序 + 門市過濾) ---
   const sortedAdminBookings = [...allBookings].sort((a, b) => {
     return new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`);
   });
 
-  const filteredAdminBookings = adminSelectedDate 
-    ? sortedAdminBookings.filter(b => b.date === adminSelectedDate)
-    : sortedAdminBookings;
+  // 1. 先依門市過濾
+  const storeFilteredBookings = sortedAdminBookings.filter(b => {
+    if (adminSelectedStore === 'all') return true;
+    return b.storeId === adminSelectedStore;
+  });
 
+  // 2. 再依日期過濾 (僅用於月曆模式的右側清單)
+  const dateFilteredBookings = adminSelectedDate 
+    ? storeFilteredBookings.filter(b => b.date === adminSelectedDate)
+    : storeFilteredBookings;
+
+  // --- 匯出功能 (下載目前門市過濾後的資料) ---
   const handleExportCSV = () => {
     const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長'];
-    const rows = sortedAdminBookings.map(b => [
+    const rows = storeFilteredBookings.map(b => [ // 使用已依門市過濾的資料
       b.date,
       b.time,
       b.storeName || '未指定',
@@ -466,7 +470,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `預約清單_${getTodayString()}.csv`;
+    link.download = `預約清單_${adminSelectedStore === 'all' ? '全部' : '分店'}_${getTodayString()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -569,7 +573,7 @@ export default function App() {
                     setBookingData({...bookingData, date: d, time: ''}); 
                   }} 
                   settings={shopSettings} 
-                  selectedStoreId={bookingData.storeId} // 傳入門市ID
+                  selectedStoreId={bookingData.storeId} 
                 />
               </div>
               
@@ -866,8 +870,8 @@ export default function App() {
 
       {/* 管理彈窗：包含人員與【加購品設定】 */}
       {isBookingManagerOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-5xl h-[85vh] shadow-2xl flex flex-col overflow-hidden rounded-sm">
+        <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
+          <div className="bg-white w-full h-full md:w-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="bg-white px-8 py-6 border-b flex justify-between items-center">
               <h3 className="text-xs tracking-[0.3em] font-bold uppercase text-[#463E3E]">系統管理中心</h3>
               <button onClick={() => setIsBookingManagerOpen(false)}><X size={24}/></button>
@@ -978,7 +982,7 @@ export default function App() {
                     <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
                       <div>
                         <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">人員名單與請假</h4>
-                        <p className="text-[10px] text-gray-400 mt-1">設定美甲師名稱與所屬門市</p>
+                        <p className="text-[10px] text-gray-400 mt-1">設定美甲師名稱，系統會根據剩餘上班人數決定預約上限</p>
                       </div>
                       <button onClick={() => {
                         const name = prompt("請輸入美甲師姓名：");
@@ -1072,7 +1076,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* --- 3. 預約管理區塊 (列表/月曆切換 + 匯出功能) --- */}
+              {/* --- 3. 預約管理區塊 (列表/月曆切換 + 匯出功能 + 門市篩選) --- */}
               {managerTab === 'bookings' && (
                 <section className="space-y-6 fade-in h-full flex flex-col">
                   <div className="flex justify-between items-center border-b border-dashed pb-4">
@@ -1080,7 +1084,21 @@ export default function App() {
                       <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">預約訂單管理</h4>
                       <p className="text-[10px] text-gray-400 mt-1">查看與管理所有顧客預約</p>
                     </div>
-                    <div className="flex gap-2 bg-[#FAF9F6] p-1 rounded-lg">
+                    <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded-lg">
+                      {/* 新增：門市篩選下拉選單 */}
+                      <select 
+                        className="text-xs border p-2 rounded bg-white outline-none"
+                        value={adminSelectedStore}
+                        onChange={(e) => setAdminSelectedStore(e.target.value)}
+                      >
+                        <option value="all">全部分店</option>
+                        {shopSettings.stores.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+
+                      <div className="w-[1px] h-6 bg-gray-300 mx-1"></div>
+
                       <button 
                         onClick={() => setBookingViewMode('list')}
                         className={`p-2 rounded ${bookingViewMode === 'list' ? 'bg-white shadow text-[#C29591]' : 'text-gray-400'}`}
@@ -1089,7 +1107,7 @@ export default function App() {
                         onClick={() => { setBookingViewMode('calendar'); setAdminSelectedDate(getTodayString()); }}
                         className={`p-2 rounded ${bookingViewMode === 'calendar' ? 'bg-white shadow text-[#C29591]' : 'text-gray-400'}`}
                       ><Grid size={16}/></button>
-                      {/* 新增下載按鈕 */}
+                      {/* 下載按鈕 */}
                       <button 
                         onClick={handleExportCSV}
                         className="p-2 rounded text-gray-400 hover:bg-white hover:text-[#C29591] transition-colors"
@@ -1100,7 +1118,7 @@ export default function App() {
 
                   {bookingViewMode === 'list' ? (
                     <div className="space-y-3 overflow-y-auto pr-2 flex-1">
-                      {sortedAdminBookings.map(b => (
+                      {storeFilteredBookings.map(b => (
                         <div key={b.id} className="border p-4 flex justify-between items-center bg-[#FAF9F6] text-[11px] hover:border-[#C29591] transition-colors group">
                           <div>
                             <div className="font-bold text-sm mb-1 flex items-center gap-2">
@@ -1117,13 +1135,13 @@ export default function App() {
                           <button onClick={() => { if(confirm('確定取消此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)); }} className="text-gray-300 hover:text-red-500 transition-colors p-2"><Trash2 size={16}/></button>
                         </div>
                       ))}
-                      {sortedAdminBookings.length === 0 && <p className="text-center text-gray-300 text-xs py-10">目前沒有預約資料</p>}
+                      {storeFilteredBookings.length === 0 && <p className="text-center text-gray-300 text-xs py-10">目前沒有預約資料</p>}
                     </div>
                   ) : (
                     <div className="flex flex-col md:flex-row gap-8 h-full overflow-hidden">
                       <div className="w-full md:w-auto flex-shrink-0">
                         <AdminBookingCalendar 
-                          bookings={allBookings} 
+                          bookings={storeFilteredBookings} // 傳入已篩選門市的預約
                           selectedDate={adminSelectedDate}
                           onDateSelect={setAdminSelectedDate}
                         />
@@ -1132,7 +1150,7 @@ export default function App() {
                         <h5 className="text-xs font-bold text-[#463E3E] mb-4 flex items-center gap-2">
                           <Calendar size={14}/> {adminSelectedDate} 的預約
                         </h5>
-                        {filteredAdminBookings.length > 0 ? filteredAdminBookings.map(b => (
+                        {dateFilteredBookings.length > 0 ? dateFilteredBookings.map(b => (
                           <div key={b.id} className="border p-4 bg-white shadow-sm text-xs relative overflow-hidden">
                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div>
                             <div className="flex justify-between">
