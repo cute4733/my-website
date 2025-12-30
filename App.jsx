@@ -22,7 +22,7 @@ const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手�
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; // 預設值
-const MAX_BOOKING_DAYS = 30; // 【新增規則】最大可預約天數
+const MAX_BOOKING_DAYS = 30; // 最大可預約天數
 
 const generateTimeSlots = () => {
   const slots = [];
@@ -126,6 +126,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
+  // 【需求2】月曆視圖強制跳轉到選擇的日期 (自動選擇第一天時會觸發)
   useEffect(() => {
     if (selectedDate) {
       setViewDate(new Date(selectedDate));
@@ -139,7 +140,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // 【新增規則】計算最大可預約日期 (Today + 30 days)
   const maxDate = new Date(today);
   maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
 
@@ -159,8 +159,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
       
       const isPastOrToday = targetDate <= today;
-
-      // 【新增規則】檢查是否超過30天
       const isTooFar = targetDate > maxDate;
       
       const isDisabled = isHoliday || isAllOnLeave || isPastOrToday || !selectedStoreId || isTooFar;
@@ -190,7 +188,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
         {WEEKDAYS.map(w => <div key={w} className="w-full aspect-square flex items-center justify-center text-xs text-gray-400 font-bold">{w}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-2">{renderDays()}</div>
-      {/* 提示文字 */}
       <div className="text-[10px] text-center text-gray-400 mt-4 tracking-widest">僅開放 {MAX_BOOKING_DAYS} 天內預約</div>
     </div>
   );
@@ -251,7 +248,6 @@ export default function App() {
   const [shopSettings, setShopSettings] = useState({ stores: [], staff: [], holidays: [] });
   const [newHolidayInput, setNewHolidayInput] = useState({ date: '', storeId: 'all' });
   const [newStoreInput, setNewStoreInput] = useState('');
-  const [newStoreCleaningTime, setNewStoreCleaningTime] = useState(20); 
   
   // 管理中心狀態
   const [managerTab, setManagerTab] = useState('stores'); 
@@ -347,10 +343,6 @@ export default function App() {
     return concurrentBookings.length >= availableStaffCount;
   };
 
-  const findFirstAvailableTime = (targetDate) => {
-    return TIME_SLOTS.find(slot => !isTimeSlotFull(targetDate, slot)) || '';
-  };
-
   // 自動跳轉邏輯
   useEffect(() => {
     if (bookingStep === 'form' && bookingData.storeId && !bookingData.date) {
@@ -389,13 +381,11 @@ export default function App() {
     }
   }, [bookingStep, bookingData.storeId, bookingData.date, shopSettings, allBookings]);
 
+  // 【需求3】日期變更時，檢查目前選擇時間是否有效，若無效則清空；不再自動選擇新時間
   useEffect(() => {
     if (bookingStep === 'form' && bookingData.date) {
-        if (!bookingData.time || isTimeSlotFull(bookingData.date, bookingData.time)) {
-            const firstTime = findFirstAvailableTime(bookingData.date);
-            if (firstTime) {
-                setBookingData(prev => ({ ...prev, time: firstTime }));
-            }
+        if (bookingData.time && isTimeSlotFull(bookingData.date, bookingData.time)) {
+             setBookingData(prev => ({ ...prev, time: '' }));
         }
     }
   }, [bookingStep, bookingData.date, allBookings, bookingData.storeId]);
@@ -543,7 +533,8 @@ export default function App() {
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
-          <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
+          {/* 【需求1】手機版分頁按鍵置中：加入了 justify-center */}
+          <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0 justify-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'home' ? 'text-[#C29591]' : ''}`}>首頁</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
@@ -1209,6 +1200,7 @@ export default function App() {
                       <p className="text-[10px] text-gray-400 mt-1">查看與管理所有顧客預約</p>
                     </div>
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded-lg">
+                      {/* 新增：門市篩選下拉選單 */}
                       <div className="flex items-center px-2">
                         <Filter size={14} className="text-gray-400 mr-1"/>
                         <select 
@@ -1233,6 +1225,7 @@ export default function App() {
                         onClick={() => { setBookingViewMode('calendar'); setAdminSelectedDate(getTodayString()); }}
                         className={`p-2 rounded ${bookingViewMode === 'calendar' ? 'bg-white shadow text-[#C29591]' : 'text-gray-400'}`}
                       ><Grid size={16}/></button>
+                      {/* 下載按鈕 */}
                       <button 
                         onClick={handleExportCSV}
                         className="p-2 rounded text-gray-400 hover:bg-white hover:text-[#C29591] transition-colors"
@@ -1256,6 +1249,7 @@ export default function App() {
                               {b.itemTitle} 
                               {b.addonName && b.addonName !== '無' ? <span className="text-[#C29591]"> + {b.addonName}</span> : ''}
                             </div>
+                            {/* 後台列表顯示付款方式 */}
                             <div className="text-[10px] text-gray-400 mt-0.5">付款: {b.paymentMethod || '門市付款'}</div>
                           </div>
                           <button onClick={() => { if(confirm('確定取消此預約？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', b.id)); }} className="text-gray-300 hover:text-red-500 transition-colors p-2"><Trash2 size={16}/></button>
@@ -1264,11 +1258,10 @@ export default function App() {
                       {storeFilteredBookings.length === 0 && <p className="text-center text-gray-300 text-xs py-10">目前沒有預約資料</p>}
                     </div>
                   ) : (
-                    // 【修復】手機版月曆顯示不全：移除 h-full 與 overflow-hidden (僅桌面版保留)
                     <div className="flex flex-col md:flex-row gap-8 h-auto md:h-full">
                       <div className="w-full md:w-auto flex-shrink-0">
                         <AdminBookingCalendar 
-                          bookings={storeFilteredBookings} 
+                          bookings={storeFilteredBookings} // 傳入已篩選門市的預約
                           selectedDate={adminSelectedDate}
                           onDateSelect={setAdminSelectedDate}
                         />
