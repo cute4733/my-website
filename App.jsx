@@ -21,12 +21,12 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
-// --- 修改：時間生成範圍更改為 12:00 - 19:00 ---
+// 時間生成範圍 12:00 - 19:00
 const generateTimeSlots = () => {
   const slots = [];
-  for (let h = 12; h <= 19; h++) { // 修改：結束時間改為 19
+  for (let h = 12; h <= 19; h++) {
     for (let m = 0; m < 60; m += 10) {
-      if (h === 19 && m > 0) break; // 嚴格限制：19:00 為最後一格，不產生 19:10
+      if (h === 19 && m > 0) break;
       slots.push(`${h}:${m === 0 ? '00' : m}`);
     }
   }
@@ -43,7 +43,7 @@ const timeToMinutes = (timeStr) => {
 // --- 子組件：款式卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [localAddonId, setLocalAddonId] = useState(''); // 卡片內部的選擇狀態
+  const [localAddonId, setLocalAddonId] = useState('');
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
   const nextImg = (e) => {
@@ -211,11 +211,9 @@ export default function App() {
     );
   }, [user]);
 
-  // 計算目前選擇的總時長 (用於碰撞檢測)
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
-  // --- 修改：優化的時間衝突檢測 ---
-  // 解決 12:00 可無限點擊的問題，並加入前後時段碰撞檢測
+  // --- 重點修正：使用交集法判斷重疊 ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
     
@@ -224,30 +222,27 @@ export default function App() {
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
     const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 1;
 
-    // 2. 準備當前檢查的時間區間 (嘗試預約的時間段)
-    const checkStart = timeToMinutes(checkTimeStr);
-    const newBookingDuration = calcTotalDuration(); // 取得當前使用者想預約的總時長
-    const checkEnd = checkStart + newBookingDuration + 20; // 包含 20 分鐘緩衝
+    // 2. 定義新預約的區間 [startA, endA)
+    // 加上 20 分鐘緩衝，確保間隔
+    const startA = timeToMinutes(checkTimeStr);
+    const endA = startA + calcTotalDuration() + 20;
 
-    // 3. 計算衝突的預約數量
+    // 3. 計算重疊數量
     const concurrentBookings = allBookings.filter(b => {
-      if (b.date !== date) return false; // 日期不同，不衝突
+      if (b.date !== date) return false;
 
-      const existingStart = timeToMinutes(b.time);
-      const existingDuration = (Number(b.totalDuration) || 90);
-      const existingEnd = existingStart + existingDuration + 20; // 現有預約的結束時間 (含緩衝)
+      // 定義現有預約的區間 [startB, endB)
+      const startB = timeToMinutes(b.time);
+      const endB = startB + (Number(b.totalDuration) || 90) + 20;
 
-      // 判斷是否重疊 (任一條件符合即視為重疊)
-      // A. 現有預約包含了檢查點 (傳統邏輯：此點已被佔)
-      const isOccupiedByExisting = (checkStart >= existingStart && checkStart < existingEnd);
-      
-      // B. 新預約的結束時間會撞到現有預約 (前瞻邏輯：我從 12:00 開始做，會不會撞到 13:00 的預約？)
-      const willClashWithExisting = (checkStart < existingStart && checkEnd > existingStart);
+      // --- 核心邏輯：判斷區間是否交集 ---
+      // 公式：(新預約開始 < 舊預約結束) AND (舊預約開始 < 新預約結束)
+      const isOverlapping = (startA < endB) && (startB < endA);
 
-      return isOccupiedByExisting || willClashWithExisting;
+      return isOverlapping;
     });
 
-    // 4. 若衝突數量 >= 可用人數，則滿額
+    // 4. 若重疊數 >= 可用人數，則滿額
     return concurrentBookings.length >= availableStaffCount;
   };
 
