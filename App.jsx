@@ -178,7 +178,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
   );
 };
 
-// --- 子組件：後台管理月曆 (修正版) ---
+// --- 子組件：後台管理月曆 ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -207,7 +207,6 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   };
 
   return (
-    // 修改：增加 max-w-md 和 mx-auto 以適應手機版，減少 padding
     <div className="w-full max-w-md mx-auto bg-white border border-[#EAE7E2] p-4 md:p-6 shadow-sm">
       <div className="flex justify-between items-center mb-6 px-2">
         <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">{currentYear}年 {currentMonth + 1}月</h4>
@@ -479,22 +478,22 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between transition-all duration-300">
-          <h1 className="text-3xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-3 md:mb-0" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
-          <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center">
-            <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={activeTab === 'home' ? 'text-[#C29591]' : ''}>首頁</button>
-            <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={activeTab === 'notice' ? 'text-[#C29591]' : ''}>須知</button>
-            <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
-            <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult(null); setSearchName(''); setSearchPhone('');}} className={activeTab === 'search' ? 'text-[#C29591]' : ''}>查詢</button>
-            <button onClick={() => {setActiveTab('store'); setBookingStep('none');}} className={activeTab === 'store' ? 'text-[#C29591]' : ''}>門市</button>
+        <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
+          <h1 className="text-3xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
+          <div className="flex gap-4 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
+            <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'home' ? 'text-[#C29591]' : ''}`}>首頁</button>
+            <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
+            <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
+            <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult(null); setSearchName(''); setSearchPhone('');}} className={`flex-shrink-0 ${activeTab === 'search' ? 'text-[#C29591]' : ''}`}>查詢</button>
+            <button onClick={() => {setActiveTab('store'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'store' ? 'text-[#C29591]' : ''}`}>門市</button>
             
             {isLoggedIn ? (
-              <div className="flex gap-4 border-l pl-4 border-[#EAE7E2]">
+              <div className="flex gap-4 border-l pl-4 border-[#EAE7E2] flex-shrink-0">
                 <button onClick={() => {setEditingItem(null); setFormData({title:'', price:'', category:'極簡氣質', duration:'90', images:[]}); setIsUploadModalOpen(true)}} className="text-[#C29591]"><Plus size={18}/></button>
                 <button onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591]"><Settings size={18}/></button>
               </div>
             ) : (
-              <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 hover:text-[#C29591] transition-colors"><Lock size={14}/></button>
+              <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 hover:text-[#C29591] transition-colors flex-shrink-0"><Lock size={14}/></button>
             )}
           </div>
         </div>
