@@ -248,7 +248,6 @@ export default function App() {
 
   const handleConfirmBooking = async () => {
     setIsSubmitting(true);
-    // 計算總價與總時長
     const finalAmount = (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
     const finalDuration = (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
@@ -286,9 +285,17 @@ export default function App() {
     return matchStyle && matchPrice;
   });
 
-  // 計算邏輯函式 (用於 Form View 顯示)
   const calcTotalAmount = () => (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
+
+  // 驗證邏輯
+  const isNameInvalid = /\d/.test(bookingData.name); // 檢查是否包含數字
+  const isPhoneInvalid = bookingData.phone.length > 0 && bookingData.phone.length !== 10;
+  const isFormValid = 
+    bookingData.name.trim() !== '' && 
+    !isNameInvalid &&
+    bookingData.phone.length === 10 && 
+    bookingData.time !== '';
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
@@ -315,7 +322,7 @@ export default function App() {
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
             
-            {/* 預約資訊摘要卡片 - 包含加總計算 */}
+            {/* 預約資訊摘要卡片 */}
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                    <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
@@ -338,19 +345,23 @@ export default function App() {
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
               {/* 姓名與電話輸入區 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <input 
-                  required 
-                  type="text" 
-                  placeholder="顧客姓名 (必填)" 
-                  className={`border-b py-2 outline-none ${!bookingData.name.trim() ? 'border-red-100 focus:border-[#C29591]' : 'border-gray-200'}`}
-                  value={bookingData.name} 
-                  onChange={e => setBookingData({...bookingData, name: e.target.value})} 
-                />
+                <div className="relative">
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="顧客姓名 (必填，不可含數字)" 
+                    className={`w-full border-b py-2 outline-none ${isNameInvalid ? 'border-red-300 text-red-500' : !bookingData.name.trim() ? 'border-red-100' : 'border-gray-200'}`}
+                    value={bookingData.name} 
+                    onChange={e => setBookingData({...bookingData, name: e.target.value})} 
+                  />
+                  {isNameInvalid && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">姓名不可包含數字</span>}
+                </div>
+                
                 <input 
                   required 
                   type="tel" 
                   placeholder="聯絡電話 (必填10碼數字)" 
-                  className={`border-b py-2 outline-none ${bookingData.phone && bookingData.phone.length !== 10 ? 'border-red-300 text-red-500' : ''}`}
+                  className={`border-b py-2 outline-none ${isPhoneInvalid ? 'border-red-300 text-red-500' : ''}`}
                   value={bookingData.phone} 
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, ''); // 只允許數字
@@ -359,7 +370,7 @@ export default function App() {
                 />
               </div>
 
-              <div className="flex justify-center">
+              <div className="flex justify-center pt-2">
                 <CustomCalendar selectedDate={bookingData.date} onDateSelect={(d) => setBookingData({...bookingData, date: d, time: ''})} settings={shopSettings} />
               </div>
               
@@ -372,11 +383,12 @@ export default function App() {
               )}
 
               <button 
-                disabled={isSubmitting || !bookingData.time || !bookingData.name.trim() || bookingData.phone.length !== 10} 
+                disabled={isSubmitting || !isFormValid} 
                 onClick={handleConfirmBooking} 
                 className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? '處理中...' : 
+                 isNameInvalid ? '姓名不可包含數字' :
                  (!bookingData.name.trim()) ? '請填寫姓名' : 
                  (bookingData.phone.length !== 10) ? '電話需為10碼數字' : 
                  !bookingData.time ? '請選擇時間' : '確認送出預約'}
