@@ -21,7 +21,7 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const CLEANING_TIME = 20;
+// 移除原本的 const CLEANING_TIME = 20; 改由設定讀取
 
 const generateTimeSlots = () => {
   const slots = [];
@@ -230,7 +230,7 @@ export default function App() {
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
-  const [shopSettings, setShopSettings] = useState({ stores: [], staff: [], holidays: [] });
+  const [shopSettings, setShopSettings] = useState({ stores: [], staff: [], holidays: [], prepTime: 20 });
   const [newHolidayInput, setNewHolidayInput] = useState({ date: '', storeId: 'all' });
   const [newStoreInput, setNewStoreInput] = useState('');
   
@@ -277,7 +277,8 @@ export default function App() {
         setShopSettings({
           stores: data.stores || [],
           staff: data.staff || [],
-          holidays: data.holidays || (data.specificHolidays ? data.specificHolidays.map(d => ({date: d, storeId: 'all'})) : [])
+          holidays: data.holidays || (data.specificHolidays ? data.specificHolidays.map(d => ({date: d, storeId: 'all'})) : []),
+          prepTime: data.prepTime !== undefined ? data.prepTime : 20 // 讀取整備時間，預設20
         });
       }
     });
@@ -294,6 +295,7 @@ export default function App() {
 
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
+  // --- 修改後的判斷邏輯，使用動態的 prepTime ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr || !bookingData.storeId) return false;
     
@@ -307,15 +309,18 @@ export default function App() {
 
     if (availableStaffCount <= 0) return true;
 
+    // 取得整備時間設定
+    const prepTime = Number(shopSettings.prepTime) || 20;
+
     const startA = timeToMinutes(checkTimeStr);
-    const endA = startA + calcTotalDuration() + CLEANING_TIME;
+    const endA = startA + calcTotalDuration() + prepTime; // 使用動態整備時間
 
     const concurrentBookings = allBookings.filter(b => {
       if (b.date !== date) return false;
       if (b.storeId !== bookingData.storeId) return false;
       
       const startB = timeToMinutes(b.time);
-      const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME;
+      const endB = startB + (Number(b.totalDuration) || 90) + prepTime; // 使用動態整備時間
       return (startA < endB) && (startB < endA);
     });
 
@@ -335,7 +340,7 @@ export default function App() {
             }
         }
     }
-  }, [bookingStep, bookingData.date, allBookings, bookingData.storeId]);
+  }, [bookingStep, bookingData.date, allBookings, bookingData.storeId, shopSettings.prepTime]);
 
   const saveShopSettings = async (newSettings) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
@@ -637,9 +642,9 @@ export default function App() {
                 <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
                   <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
                   <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
-                     <span className="text-lg font-bold tracking-widest">{bookingData.date}</span>
-                     <span className="text-[#C29591]">•</span>
-                     <span className="text-xl font-bold tracking-widest">{bookingData.time}</span>
+                      <span className="text-lg font-bold tracking-widest">{bookingData.date}</span>
+                      <span className="text-[#C29591]">•</span>
+                      <span className="text-xl font-bold tracking-widest">{bookingData.time}</span>
                   </div>
                   <div className="mt-2 text-xs font-bold text-[#C29591]">
                     {shopSettings.stores.find(s=>s.id === bookingData.storeId)?.name}
@@ -942,9 +947,27 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               
-              {/* --- 0. 門市設定區塊 --- */}
+              {/* --- 0. 門市設定區塊 (新增整備時間設定) --- */}
               {managerTab === 'stores' && (
                 <section className="space-y-6 fade-in">
+                   {/* 新增：全域設定 - 整備時間 */}
+                   <div className="bg-[#FAF9F6] p-4 border border-[#EAE7E2] mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Clock size={16} className="text-[#C29591]"/>
+                        <h5 className="text-xs font-bold text-[#463E3E]">全域設定：預約間隔 / 整備時間</h5>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <label className="text-[10px] text-gray-400">每筆預約後的緩衝時間 (分鐘)</label>
+                        <input 
+                           type="number"
+                           value={shopSettings.prepTime !== undefined ? shopSettings.prepTime : 20}
+                           onChange={(e) => saveShopSettings({ ...shopSettings, prepTime: Number(e.target.value) })}
+                           className="border border-[#EAE7E2] p-2 text-xs w-24 outline-none focus:border-[#C29591]"
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-2 pl-6">* 此設定將影響所有門市的預約空檔計算</p>
+                   </div>
+
                   <div className="border-l-4 border-[#C29591] pl-4">
                     <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4>
                     <p className="text-[10px] text-gray-400 mt-1">設定品牌旗下的所有分店</p>
