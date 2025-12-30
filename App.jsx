@@ -24,16 +24,20 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; // 預設值
 const MAX_BOOKING_DAYS = 30; // 最大可預約天數
 
+// ▼▼▼ 修改處：最晚時間更改為 18:30 ▼▼▼
 const generateTimeSlots = () => {
   const slots = [];
-  for (let h = 12; h <= 19; h++) {
+  // 迴圈只跑到 18 點
+  for (let h = 12; h <= 18; h++) {
     for (let m = 0; m < 60; m += 10) {
-      if (h === 19 && m > 0) break;
+      // 如果是 18 點，且分鐘超過 30 分，就停止加入 (即最後一個是 18:30)
+      if (h === 18 && m > 30) break;
       slots.push(`${h}:${m === 0 ? '00' : m}`);
     }
   }
   return slots;
 };
+// ▲▲▲ 修改結束 ▲▲▲
 const TIME_SLOTS = generateTimeSlots();
 
 const timeToMinutes = (timeStr) => {
@@ -126,7 +130,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
-  // 【需求2】月曆視圖強制跳轉到選擇的日期 (自動選擇第一天時會觸發)
+  // 【需求2】月曆視圖強制跳轉到選擇的日期
   useEffect(() => {
     if (selectedDate) {
       setViewDate(new Date(selectedDate));
@@ -598,6 +602,7 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="relative">
                   <input 
+                    autoComplete="off"
                     required 
                     type="text" 
                     placeholder="顧客姓名 (必填，不可含數字)" 
@@ -609,6 +614,7 @@ export default function App() {
                 </div>
                 
                 <input 
+                  autoComplete="off"
                   required 
                   type="tel" 
                   placeholder="聯絡電話 (必填10碼數字)" 
@@ -792,93 +798,93 @@ export default function App() {
           </div>
         ) : activeTab === 'search' ? ( 
           <div className="max-w-lg mx-auto py-12 px-6">
-             <div className="text-center mb-12">
-                <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
-                <p className="text-xs text-gray-400 tracking-widest">請輸入預約時的姓名與電話以查詢</p>
-             </div>
+              <div className="text-center mb-12">
+                 <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
+                 <p className="text-xs text-gray-400 tracking-widest">請輸入預約時的姓名與電話以查詢</p>
+              </div>
 
-             <form onSubmit={handleSearchBooking} className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
-               <input 
-                 type="text" 
-                 placeholder="預約姓名 (Name)" 
-                 className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
-                 value={searchName}
-                 onChange={e => setSearchName(e.target.value)}
-               />
-               <input 
-                 type="tel" 
-                 placeholder="預約電話 (Phone)" 
-                 className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
-                 value={searchPhone}
-                 onChange={e => setSearchPhone(e.target.value)}
-               />
-               <button className="bg-[#463E3E] text-white w-full py-3 mt-2 text-xs tracking-widest hover:bg-[#C29591] transition-colors flex items-center justify-center gap-2">
-                 <Search size={14}/> 查詢預約
-               </button>
-             </form>
+              <form onSubmit={handleSearchBooking} autoComplete="off" className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
+                <input 
+                  type="text" 
+                  placeholder="預約姓名 (Name)" 
+                  className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
+                  value={searchName}
+                  onChange={e => setSearchName(e.target.value)}
+                />
+                <input 
+                  type="tel" 
+                  placeholder="預約電話 (Phone)" 
+                  className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
+                  value={searchPhone}
+                  onChange={e => setSearchPhone(e.target.value)}
+                />
+                <button className="bg-[#463E3E] text-white w-full py-3 mt-2 text-xs tracking-widest hover:bg-[#C29591] transition-colors flex items-center justify-center gap-2">
+                  <Search size={14}/> 查詢預約
+                </button>
+              </form>
 
-             {searchResult && (
-                <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
-                  <div className="h-1 w-full bg-[#C29591]"></div>
-                  {(() => {
-                    const linkedItem = cloudItems.find(i => i.title === searchResult.itemTitle);
-                    return linkedItem?.images?.[0] ? (
-                      <div className="w-full h-40 relative bg-gray-50 group">
-                        <img src={linkedItem.images[0]} className="w-full h-full object-cover" alt="booked-item" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-4">
-                          <div className="text-white">
-                            <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{linkedItem.category}</p>
-                            <h3 className="text-sm font-medium tracking-wide">{searchResult.itemTitle}</h3>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null;
-                  })()}
+              {searchResult && (
+                 <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
+                   <div className="h-1 w-full bg-[#C29591]"></div>
+                   {(() => {
+                     const linkedItem = cloudItems.find(i => i.title === searchResult.itemTitle);
+                     return linkedItem?.images?.[0] ? (
+                       <div className="w-full h-40 relative bg-gray-50 group">
+                         <img src={linkedItem.images[0]} className="w-full h-full object-cover" alt="booked-item" />
+                         <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-4">
+                           <div className="text-white">
+                             <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{linkedItem.category}</p>
+                             <h3 className="text-sm font-medium tracking-wide">{searchResult.itemTitle}</h3>
+                           </div>
+                         </div>
+                       </div>
+                     ) : null;
+                   })()}
 
-                  <div className="p-8">
-                    <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
-                      <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
-                      <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
-                        <span className="text-lg font-bold tracking-widest">{searchResult.date}</span>
-                        <span className="text-[#C29591]">•</span>
-                        <span className="text-xl font-bold tracking-widest">{searchResult.time}</span>
-                      </div>
-                      <div className="mt-2 text-xs font-bold text-[#C29591]">{searchResult.storeName}</div>
-                    </div>
+                   <div className="p-8">
+                     <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
+                       <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
+                       <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
+                         <span className="text-lg font-bold tracking-widest">{searchResult.date}</span>
+                         <span className="text-[#C29591]">•</span>
+                         <span className="text-xl font-bold tracking-widest">{searchResult.time}</span>
+                       </div>
+                       <div className="mt-2 text-xs font-bold text-[#C29591]">{searchResult.storeName}</div>
+                     </div>
 
-                    <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">顧客姓名</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.name}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">聯絡電話</span>
-                        <span className="font-medium font-mono">{searchResult.phone}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">加購項目</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.addonName}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">預計總時長</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.totalDuration} 分鐘</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">付款方式</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.paymentMethod || '門市付款'}</span>
-                      </div>
-                    </div>
+                     <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">顧客姓名</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.name}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">聯絡電話</span>
+                         <span className="font-medium font-mono">{searchResult.phone}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">加購項目</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.addonName}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">預計總時長</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.totalDuration} 分鐘</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">付款方式</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.paymentMethod || '門市付款'}</span>
+                       </div>
+                     </div>
 
-                    <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
-                      <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
-                      <div className="text-2xl font-bold text-[#C29591] leading-none">
-                        <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
-                        {searchResult.totalAmount?.toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-             )}
+                     <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
+                       <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
+                       <div className="text-2xl font-bold text-[#C29591] leading-none">
+                         <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
+                         {searchResult.totalAmount?.toLocaleString()}
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+              )}
           </div>
         ) : activeTab === 'store' ? (
           <div className="max-w-4xl mx-auto py-16 px-6">
@@ -941,6 +947,13 @@ export default function App() {
                   onBook={(i, addon) => { 
                     setSelectedItem(i); 
                     setSelectedAddon(addon); 
+                    // 重置門市、日期與時間，防止舊狀態殘留
+                    setBookingData(prev => ({
+                        ...prev,
+                        storeId: '',
+                        date: '',
+                        time: ''
+                    }));
                     setBookingStep('form'); 
                     window.scrollTo(0,0); 
                   }}
@@ -958,7 +971,7 @@ export default function App() {
           <div className="bg-white p-10 max-w-sm w-full shadow-2xl">
             <h3 className="tracking-[0.5em] mb-10 font-light text-gray-400 text-sm uppercase text-center">Admin Access</h3>
             <form onSubmit={(e) => { e.preventDefault(); if(passwordInput==="8888") setIsLoggedIn(true); setIsAdminModalOpen(false); }}>
-              <input type="password" placeholder="••••" className="w-full border-b py-4 text-center tracking-[1.5em] outline-none" onChange={e => setPasswordInput(e.target.value)} autoFocus />
+              <input type="password" autoComplete="off" placeholder="••••" className="w-full border-b py-4 text-center tracking-[1.5em] outline-none" onChange={e => setPasswordInput(e.target.value)} autoFocus />
               <button className="w-full bg-[#463E3E] text-white py-4 mt-6 text-xs tracking-widest">ENTER</button>
             </form>
           </div>
@@ -1102,7 +1115,6 @@ export default function App() {
                       <button onClick={() => {
                         const name = prompt("請輸入美甲師姓名：");
                         if(name) {
-                          // 簡單 prompt 無法選門市，預設 assign 給第一個門市，後續可改 UI
                           const defaultStoreId = shopSettings.stores[0]?.id || '';
                           saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, storeId: defaultStoreId, leaveDates: [] }] });
                         }
