@@ -23,13 +23,11 @@ const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const CLEANING_TIME = 20;
 
-// --- 修改點 1：延長時段以支援加班 (從 19 點延長至 23 點) ---
 const generateTimeSlots = () => {
   const slots = [];
-  // 將結束時間從 19 延長至 23，允許加班預約
-  for (let h = 12; h <= 23; h++) {
+  for (let h = 12; h <= 19; h++) {
     for (let m = 0; m < 60; m += 10) {
-      if (h === 23 && m > 0) break; // 23:00 為最後一個整點，可視需求調整
+      if (h === 19 && m > 0) break;
       slots.push(`${h}:${m === 0 ? '00' : m}`);
     }
   }
@@ -324,9 +322,20 @@ export default function App() {
     return concurrentBookings.length >= availableStaffCount;
   };
 
-  // --- 修改點 2：已移除原有的 useEffect 自動選擇時間邏輯 ---
-  // 該 useEffect 原本會偵測當日期有值時，若未選時間則自動選取第一個可用時間。
-  // 現在已整段刪除，因此用戶必須手動點選下方時間方塊。
+  const findFirstAvailableTime = (targetDate) => {
+    return TIME_SLOTS.find(slot => !isTimeSlotFull(targetDate, slot)) || '';
+  };
+
+  useEffect(() => {
+    if (bookingStep === 'form' && bookingData.date) {
+        if (!bookingData.time || isTimeSlotFull(bookingData.date, bookingData.time)) {
+            const firstTime = findFirstAvailableTime(bookingData.date);
+            if (firstTime) {
+                setBookingData(prev => ({ ...prev, time: firstTime }));
+            }
+        }
+    }
+  }, [bookingStep, bookingData.date, allBookings, bookingData.storeId]);
 
   const saveShopSettings = async (newSettings) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
@@ -628,9 +637,9 @@ export default function App() {
                 <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
                   <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
                   <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
-                      <span className="text-lg font-bold tracking-widest">{bookingData.date}</span>
-                      <span className="text-[#C29591]">•</span>
-                      <span className="text-xl font-bold tracking-widest">{bookingData.time}</span>
+                     <span className="text-lg font-bold tracking-widest">{bookingData.date}</span>
+                     <span className="text-[#C29591]">•</span>
+                     <span className="text-xl font-bold tracking-widest">{bookingData.time}</span>
                   </div>
                   <div className="mt-2 text-xs font-bold text-[#C29591]">
                     {shopSettings.stores.find(s=>s.id === bookingData.storeId)?.name}
