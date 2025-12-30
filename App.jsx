@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -20,9 +20,8 @@ const appId = 'uniwawa01';
 // --- 常數設定 ---
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const CLEANING_TIME = 20; // 修改：定義清潔時間為 20 分鐘
+const CLEANING_TIME = 20;
 
-// 時間範圍 12:00 - 19:00
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 19; h++) {
@@ -41,7 +40,6 @@ const timeToMinutes = (timeStr) => {
   return h * 60 + m;
 };
 
-// 取得今天的日期字串 YYYY-MM-DD
 const getTodayString = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -202,6 +200,11 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
 
+  // 修改：查詢功能狀態 (分開姓名與電話)
+  const [searchName, setSearchName] = useState('');
+  const [searchPhone, setSearchPhone] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+
   useEffect(() => {
     signInAnonymously(auth);
     onAuthStateChanged(auth, u => setUser(u));
@@ -218,18 +221,16 @@ export default function App() {
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), (s) => 
       setAddons(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
-    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), (s) => 
+    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), orderBy('createdAt', 'desc')), (s) => 
       setAllBookings(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
   }, [user]);
 
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
-  // --- 判斷特定時間點是否已滿 (含清潔時間) ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr) return false;
     
-    // 1. 檢查是否為過去時間 (今日)
     const todayStr = getTodayString();
     if (date === todayStr) {
       const now = new Date();
@@ -238,31 +239,27 @@ export default function App() {
       if (checkMinutes <= currentMinutes) return true;
     }
     
-    // 2. 計算當日可用人力
     const staffList = shopSettings.staff || [];
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
     const availableStaffCount = staffList.length > 0 ? (staffList.length - onLeaveCount) : 1;
 
-    // 3. 預約重疊檢測 (交集法 + 清潔時間)
     const startA = timeToMinutes(checkTimeStr);
-    const endA = startA + calcTotalDuration() + CLEANING_TIME; // 加入清潔時間
+    const endA = startA + calcTotalDuration() + CLEANING_TIME;
 
     const concurrentBookings = allBookings.filter(b => {
       if (b.date !== date) return false;
       const startB = timeToMinutes(b.time);
-      const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME; // 現有預約也加入清潔時間
+      const endB = startB + (Number(b.totalDuration) || 90) + CLEANING_TIME;
       return (startA < endB) && (startB < endA);
     });
 
     return concurrentBookings.length >= availableStaffCount;
   };
 
-  // --- 輔助：尋找第一個可用時間 ---
   const findFirstAvailableTime = (targetDate) => {
     return TIME_SLOTS.find(slot => !isTimeSlotFull(targetDate, slot)) || '';
   };
 
-  // --- Effect: 當進入預約表單時，自動選取第一個可用時間 ---
   useEffect(() => {
     if (bookingStep === 'form' && bookingData.date) {
         if (!bookingData.time || isTimeSlotFull(bookingData.date, bookingData.time)) {
@@ -323,6 +320,27 @@ export default function App() {
     } catch (err) { alert("儲存失敗"); } finally { setIsUploading(false); }
   };
 
+  // --- 修改：嚴格搜尋預約邏輯 (姓名 + 電話) ---
+  const handleSearchBooking = (e) => {
+    e.preventDefault();
+    if(!searchName.trim() || !searchPhone.trim()) return;
+    
+    // 嚴格比對：姓名 與 電話 都必須吻合
+    const results = allBookings.filter(b => 
+      b.name === searchName.trim() && b.phone === searchPhone.trim()
+    );
+    
+    // 排序：取日期最近的（未來優先）
+    results.sort((a,b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`));
+    
+    if (results.length > 0) {
+       setSearchResult(results[0]); 
+    } else {
+       alert('查無預約資料，請確認姓名與電話是否正確');
+       setSearchResult(null);
+    }
+  };
+
   const filteredItems = cloudItems.filter(item => {
     const matchStyle = styleFilter === '全部' || item.category === styleFilter;
     let matchPrice = true;
@@ -334,7 +352,6 @@ export default function App() {
 
   const calcTotalAmount = () => (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
 
-  // 驗證邏輯
   const isNameInvalid = /\d/.test(bookingData.name);
   const isPhoneInvalid = bookingData.phone.length > 0 && bookingData.phone.length !== 10;
   const isFormValid = 
@@ -351,6 +368,9 @@ export default function App() {
           <div className="flex gap-6 text-sm tracking-widest font-medium uppercase items-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={activeTab === 'home' ? 'text-[#C29591]' : ''}>首頁</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
+            {/* 查詢按鈕 */}
+            <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult(null); setSearchName(''); setSearchPhone('');}} className={activeTab === 'search' ? 'text-[#C29591]' : ''}>查詢</button>
+            
             {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2]">
                 <button onClick={() => {setEditingItem(null); setFormData({title:'', price:'', category:'極簡氣質', duration:'90', images:[]}); setIsUploadModalOpen(true)}} className="text-[#C29591]"><Plus size={18}/></button>
@@ -367,8 +387,6 @@ export default function App() {
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
-            
-            {/* 預約資訊摘要卡片 */}
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                    <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
@@ -389,7 +407,6 @@ export default function App() {
             </div>
 
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
-              {/* 姓名與電話輸入區 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="relative">
                   <input 
@@ -516,6 +533,93 @@ export default function App() {
             >
               回到首頁
             </button>
+          </div>
+        ) : activeTab === 'search' ? ( 
+          // --- 修改：雙重驗證查詢預約頁面 ---
+          <div className="max-w-lg mx-auto py-12 px-6">
+             <div className="text-center mb-12">
+                <h2 className="text-xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
+                <p className="text-[10px] text-gray-400 tracking-widest">請輸入預約時的姓名與電話以查詢</p>
+             </div>
+
+             <form onSubmit={handleSearchBooking} className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
+               <input 
+                 type="text" 
+                 placeholder="預約姓名 (Name)" 
+                 className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
+                 value={searchName}
+                 onChange={e => setSearchName(e.target.value)}
+               />
+               <input 
+                 type="tel" 
+                 placeholder="預約電話 (Phone)" 
+                 className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
+                 value={searchPhone}
+                 onChange={e => setSearchPhone(e.target.value)}
+               />
+               <button className="bg-[#463E3E] text-white w-full py-3 mt-2 text-xs tracking-widest hover:bg-[#C29591] transition-colors flex items-center justify-center gap-2">
+                 <Search size={14}/> 查詢預約
+               </button>
+             </form>
+
+             {searchResult && (
+                <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
+                  <div className="h-1 w-full bg-[#C29591]"></div>
+                  {/* 嘗試找出該款式的圖片 (若有) */}
+                  {(() => {
+                    const linkedItem = cloudItems.find(i => i.title === searchResult.itemTitle);
+                    return linkedItem?.images?.[0] ? (
+                      <div className="w-full h-40 relative bg-gray-50 group">
+                        <img src={linkedItem.images[0]} className="w-full h-full object-cover" alt="booked-item" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-4">
+                          <div className="text-white">
+                            <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{linkedItem.category}</p>
+                            <h3 className="text-sm font-medium tracking-wide">{searchResult.itemTitle}</h3>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <div className="p-8">
+                    <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
+                      <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
+                      <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
+                        <span className="text-lg font-bold tracking-widest">{searchResult.date}</span>
+                        <span className="text-[#C29591]">•</span>
+                        <span className="text-xl font-bold tracking-widest">{searchResult.time}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
+                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                        <span className="text-gray-400">顧客姓名</span>
+                        <span className="font-medium text-[#463E3E]">{searchResult.name}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                        <span className="text-gray-400">聯絡電話</span>
+                        <span className="font-medium font-mono">{searchResult.phone}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                        <span className="text-gray-400">加購項目</span>
+                        <span className="font-medium text-[#463E3E]">{searchResult.addonName}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                        <span className="text-gray-400">預計總時長</span>
+                        <span className="font-medium text-[#463E3E]">{searchResult.totalDuration} 分鐘</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
+                      <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
+                      <div className="text-2xl font-bold text-[#C29591] leading-none">
+                        <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
+                        {searchResult.totalAmount?.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+             )}
           </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
