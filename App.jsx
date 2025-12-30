@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, MessageCircle, Calendar } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -200,7 +200,6 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [] });
 
-  // 修改：查詢功能狀態 (分開姓名與電話)
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
   const [searchResult, setSearchResult] = useState(null);
@@ -320,19 +319,13 @@ export default function App() {
     } catch (err) { alert("儲存失敗"); } finally { setIsUploading(false); }
   };
 
-  // --- 修改：嚴格搜尋預約邏輯 (姓名 + 電話) ---
   const handleSearchBooking = (e) => {
     e.preventDefault();
     if(!searchName.trim() || !searchPhone.trim()) return;
-    
-    // 嚴格比對：姓名 與 電話 都必須吻合
     const results = allBookings.filter(b => 
       b.name === searchName.trim() && b.phone === searchPhone.trim()
     );
-    
-    // 排序：取日期最近的（未來優先）
     results.sort((a,b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`));
-    
     if (results.length > 0) {
        setSearchResult(results[0]); 
     } else {
@@ -367,8 +360,8 @@ export default function App() {
           <h1 className="text-xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E]" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-6 text-sm tracking-widest font-medium uppercase items-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={activeTab === 'home' ? 'text-[#C29591]' : ''}>首頁</button>
+            <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={activeTab === 'notice' ? 'text-[#C29591]' : ''}>須知</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
-            {/* 查詢按鈕 */}
             <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult(null); setSearchName(''); setSearchPhone('');}} className={activeTab === 'search' ? 'text-[#C29591]' : ''}>查詢</button>
             
             {isLoggedIn ? (
@@ -534,8 +527,57 @@ export default function App() {
               回到首頁
             </button>
           </div>
+        ) : activeTab === 'notice' ? (
+          <div className="max-w-3xl mx-auto py-16 px-6">
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">RESERVATION POLICY / 預約須知</h2>
+            <div className="space-y-12">
+              <div className="flex gap-6">
+                <div className="flex-shrink-0 mt-1"><Info className="text-[#C29591]" size={24}/></div>
+                <div>
+                  <h4 className="text-sm font-bold tracking-widest text-[#463E3E] mb-2 uppercase">預約說明</h4>
+                  <ul className="text-xs text-gray-500 space-y-2 leading-relaxed list-disc list-outside pl-4">
+                    <li>本店採「網站預約制」，請依系統開放的時段與服務項目進行預約。</li>
+                    <li>服務款式以網站上提供內容為主，暫不提供帶圖或客製設計服務。</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="flex gap-6">
+                <div className="flex-shrink-0 mt-1"><AlertTriangle className="text-[#C29591]" size={24}/></div>
+                <div>
+                  <h4 className="text-sm font-bold tracking-widest text-[#463E3E] mb-2 uppercase">服務限制</h4>
+                  <ul className="text-xs text-gray-500 space-y-2 leading-relaxed list-disc list-outside pl-4">
+                    <li>為了衛生與施作安全考量，恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務，敬請理解。</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="flex gap-6">
+                <div className="flex-shrink-0 mt-1"><Clock className="text-[#C29591]" size={24}/></div>
+                <div>
+                  <h4 className="text-sm font-bold tracking-widest text-[#463E3E] mb-2 uppercase">守時與更動</h4>
+                  <ul className="text-xs text-gray-500 space-y-2 leading-relaxed list-disc list-outside pl-4">
+                    <li>若遲到超過 <span className="font-bold text-[#463E3E]">10 分鐘</span>，將視當日狀況調整服務內容。</li>
+                    <li>遲到或其他相關問題請聯絡 LINE 官方客服。LINE 僅協助處理當日狀況，恕不作為預約管道。</li>
+                    <li>如需取消或改期，請於 <span className="font-bold text-[#463E3E]">預約 24 小時前</span> 告知。</li>
+                    <li>未提前取消或無故未到者，將無法再接受後續預約，謝謝您的體諒。</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="flex gap-6">
+                <div className="flex-shrink-0 mt-1"><ShieldCheck className="text-[#C29591]" size={24}/></div>
+                <div>
+                  <h4 className="text-sm font-bold tracking-widest text-[#463E3E] mb-2 uppercase">保固服務</h4>
+                  <ul className="text-xs text-gray-500 space-y-2 leading-relaxed list-disc list-outside pl-4">
+                    <li>施作後 7 日內非人為因素脫落，可協助免費補修，補修請提前預約。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : activeTab === 'search' ? ( 
-          // --- 修改：雙重驗證查詢預約頁面 ---
+          // --- 雙重驗證查詢預約頁面 ---
           <div className="max-w-lg mx-auto py-12 px-6">
              <div className="text-center mb-12">
                 <h2 className="text-xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
@@ -565,7 +607,6 @@ export default function App() {
              {searchResult && (
                 <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
                   <div className="h-1 w-full bg-[#C29591]"></div>
-                  {/* 嘗試找出該款式的圖片 (若有) */}
                   {(() => {
                     const linkedItem = cloudItems.find(i => i.title === searchResult.itemTitle);
                     return linkedItem?.images?.[0] ? (
