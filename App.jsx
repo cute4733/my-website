@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -178,7 +178,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
   );
 };
 
-// --- 子組件：後台管理月曆 (接收已過濾的預約) ---
+// --- 子組件：後台管理月曆 ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -191,7 +191,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
     for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const hasBooking = bookings.some(b => b.date === dateStr); // 只顯示目前篩選清單中的預約
+      const hasBooking = bookings.some(b => b.date === dateStr);
       const isSelected = selectedDate === dateStr;
 
       days.push(
@@ -238,7 +238,7 @@ export default function App() {
   const [managerTab, setManagerTab] = useState('stores'); 
   const [bookingViewMode, setBookingViewMode] = useState('list'); 
   const [adminSelectedDate, setAdminSelectedDate] = useState('');
-  const [adminSelectedStore, setAdminSelectedStore] = useState('all'); // 新增：後台門市篩選狀態
+  const [adminSelectedStore, setAdminSelectedStore] = useState('all');
 
   const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
 
@@ -299,7 +299,8 @@ export default function App() {
     
     const staffList = (shopSettings.staff || []).filter(s => s.storeId === bookingData.storeId);
     const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
-    // 修正：若該店無員工設定，預設容量為 1，避免完全鎖死
+    
+    // 若該店無員工設定，預設容量為 1，避免完全鎖死
     const availableStaffCount = staffList.length === 0 ? 1 : (staffList.length - onLeaveCount);
 
     if (availableStaffCount <= 0) return true;
@@ -435,26 +436,22 @@ export default function App() {
     bookingData.time !== '' &&
     bookingData.storeId !== '';
 
-  // --- 後台資料處理邏輯 (排序 + 門市過濾) ---
   const sortedAdminBookings = [...allBookings].sort((a, b) => {
     return new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`);
   });
 
-  // 1. 先依門市過濾
   const storeFilteredBookings = sortedAdminBookings.filter(b => {
     if (adminSelectedStore === 'all') return true;
     return b.storeId === adminSelectedStore;
   });
 
-  // 2. 再依日期過濾 (僅用於月曆模式的右側清單)
   const dateFilteredBookings = adminSelectedDate 
     ? storeFilteredBookings.filter(b => b.date === adminSelectedDate)
     : storeFilteredBookings;
 
-  // --- 匯出功能 (下載目前門市過濾後的資料) ---
   const handleExportCSV = () => {
     const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '服務項目', '加購項目', '金額', '預計時長'];
-    const rows = storeFilteredBookings.map(b => [ // 使用已依門市過濾的資料
+    const rows = storeFilteredBookings.map(b => [ 
       b.date,
       b.time,
       b.storeName || '未指定',
@@ -485,6 +482,7 @@ export default function App() {
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={activeTab === 'notice' ? 'text-[#C29591]' : ''}>須知</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
             <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult(null); setSearchName(''); setSearchPhone('');}} className={activeTab === 'search' ? 'text-[#C29591]' : ''}>查詢</button>
+            <button onClick={() => {setActiveTab('store'); setBookingStep('none');}} className={activeTab === 'store' ? 'text-[#C29591]' : ''}>門市</button>
             
             {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2]">
@@ -809,6 +807,28 @@ export default function App() {
                 </div>
              )}
           </div>
+        ) : activeTab === 'store' ? (
+          // --- 新增：門市資訊頁面 ---
+          <div className="max-w-4xl mx-auto py-16 px-6">
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">STORE LOCATIONS / 門市資訊</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
+                  <div className="aspect-video bg-gray-100 overflow-hidden relative">
+                     <img src="https://images.unsplash.com/photo-1522337660859-02fbefca4702?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
+                     <div className="absolute inset-0 bg-[#463E3E]/10 group-hover:bg-transparent transition-colors"></div>
+                  </div>
+                  <div className="p-8">
+                     <h3 className="text-lg font-medium tracking-widest text-[#463E3E] mb-2">桃園文中店</h3>
+                     <div className="w-8 h-[1px] bg-[#C29591] mb-6"></div>
+                     <div className="flex items-start gap-3 text-xs text-gray-500 leading-relaxed mb-6">
+                        <MapPin size={16} className="text-[#C29591] flex-shrink-0 mt-0.5" />
+                        <span>桃園區文中三路 67 號 1 樓</span>
+                     </div>
+                     <button className="w-full border border-[#EAE7E2] py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white hover:border-[#463E3E] transition-all">GOOGLE MAPS</button>
+                  </div>
+               </div>
+            </div>
+          </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
@@ -1086,16 +1106,19 @@ export default function App() {
                     </div>
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded-lg">
                       {/* 新增：門市篩選下拉選單 */}
-                      <select 
-                        className="text-xs border p-2 rounded bg-white outline-none"
-                        value={adminSelectedStore}
-                        onChange={(e) => setAdminSelectedStore(e.target.value)}
-                      >
-                        <option value="all">全部分店</option>
-                        {shopSettings.stores.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
+                      <div className="flex items-center px-2">
+                        <Filter size={14} className="text-gray-400 mr-1"/>
+                        <select 
+                          className="text-xs border-none bg-transparent outline-none text-[#463E3E] font-medium"
+                          value={adminSelectedStore}
+                          onChange={(e) => setAdminSelectedStore(e.target.value)}
+                        >
+                          <option value="all">全部分店</option>
+                          {shopSettings.stores.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
 
                       <div className="w-[1px] h-6 bg-gray-300 mx-1"></div>
 
