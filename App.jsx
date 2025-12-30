@@ -50,6 +50,57 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
+// --- 核心邏輯：檢查特定時段是否可用 (純函數，供多處調用) ---
+const checkAvailability = (targetStoreId, targetDate, targetTime, requiredDuration, allBookings, shopSettings) => {
+  if (!targetStoreId || !targetDate || !targetTime) return false;
+
+  // 1. 檢查是否為過去日期 (含今日已過時間可視需求調整，目前簡易判斷日期)
+  const todayStr = getTodayString();
+  const targetDateObj = new Date(targetDate);
+  const todayDateObj = new Date(todayStr);
+  if (targetDateObj < todayDateObj) return false; // 過去日期不可約
+
+  // 2. 檢查公休日
+  const isGlobalHoliday = (shopSettings.holidays || []).some(h => h.date === targetDate && h.storeId === 'all');
+  const isStoreHoliday = (shopSettings.holidays || []).some(h => h.date === targetDate && String(h.storeId) === String(targetStoreId));
+  if (isGlobalHoliday || isStoreHoliday) return false;
+
+  // 3. 計算該店當日可用人力
+  const staffList = (shopSettings.staff || []).filter(s => String(s.storeId) === String(targetStoreId));
+  const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(targetDate)).length;
+  const availableStaffCount = staffList.length === 0 ? 0 : (staffList.length - onLeaveCount);
+
+  if (availableStaffCount <= 0) return false; // 無人上班
+
+  // 4. 取得該店整備時間
+  const store = (shopSettings.stores || []).find(s => String(s.id) === String(targetStoreId));
+  const cleaningTime = Number(store?.cleaningTime) || DEFAULT_CLEANING_TIME;
+
+  // 5. 計算「新預約」的時間區間 [start, end]
+  //    公式：開始時間 ~ (開始 + 服務時長 + 整備時間)
+  const newStart = timeToMinutes(targetTime);
+  const newEnd = newStart + requiredDuration + cleaningTime;
+
+  // 6. 計算「現有訂單」的重疊數量
+  const concurrentBookings = allBookings.filter(b => {
+    // 過濾不同日期或不同分店
+    if (b.date !== targetDate) return false;
+    if (String(b.storeId) !== String(targetStoreId)) return false;
+
+    const existingStart = timeToMinutes(b.time);
+    const existingDuration = Number(b.totalDuration) || 90; 
+    // 現有訂單同樣加上整備時間來計算佔用區間
+    const existingEnd = existingStart + existingDuration + cleaningTime;
+
+    // 判斷重疊：(NewStart < ExistingEnd) AND (ExistingStart < NewEnd)
+    return (newStart < existingEnd) && (existingStart < newEnd);
+  });
+
+  // 7. 若重疊訂單數 >= 可用人力，則該時段額滿 (不可用)
+  return concurrentBookings.length < availableStaffCount;
+};
+
+
 // --- 子組件：款式卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -308,58 +359,29 @@ export default function App() {
   // 計算此次預約的純服務時長 (商品 + 加購)
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
-  const getStoreCleaningTime = (sId) => {
-    const s = (shopSettings.stores || []).find(i => String(i.id) === String(sId));
-    const val = Number(s?.cleaningTime);
-    return isNaN(val) ? DEFAULT_CLEANING_TIME : val;
-  };
-
+  // 包裝函數：在組件內使用 checkAvailability
+  // 注意：這裡的 isFull 意思其實是 "NOT Available"
   const isTimeSlotFull = (date, checkTimeStr) => {
-    if (!date || !checkTimeStr || !bookingData.storeId) return false;
-    
-    // 如果當天設定為全店不可預約
-    const todayStr = getTodayString();
-    if (date === todayStr) return true;
-    
-    // 1. 計算該時段可用人力
-    const staffList = (shopSettings.staff || []).filter(s => String(s.storeId) === String(bookingData.storeId));
-    const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(date)).length;
-    const availableStaffCount = staffList.length === 0 ? 0 : (staffList.length - onLeaveCount);
-
-    if (availableStaffCount <= 0) return true;
-
-    // 2. 獲取該店整備時間 (強制轉為數字)
-    const specificCleaningTime = getStoreCleaningTime(bookingData.storeId);
-
-    // 3. 計算「新預約」佔用的起訖時間 (開始 ~ 款式+加購+整備)
-    const startA = timeToMinutes(checkTimeStr);
-    const durationA = calcTotalDuration(); // 包含 款式時間 + 加購時間
-    const endA = startA + durationA + specificCleaningTime; // 真正的結束時間包含整備
-
-    // 4. 比對現有訂單
-    const concurrentBookings = allBookings.filter(b => {
-      if (b.date !== date) return false;
-      if (String(b.storeId) !== String(bookingData.storeId)) return false;
-      
-      const startB = timeToMinutes(b.time);
-      const durationB = Number(b.totalDuration) || 90; 
-      // 現有訂單結束時間也必須加上整備時間
-      const endB = startB + durationB + specificCleaningTime;
-
-      // 判斷重疊公式
-      return (startA < endB) && (startB < endA);
-    });
-
-    return concurrentBookings.length >= availableStaffCount;
+    const isAvailable = checkAvailability(
+      bookingData.storeId, 
+      date, 
+      checkTimeStr, 
+      calcTotalDuration(), 
+      allBookings, 
+      shopSettings
+    );
+    return !isAvailable; // Available=true, Full=false -> Function returns true if Full
   };
 
   // --- 【修正1】自動跳轉邏輯 ---
   // 當「進入表單且已選門市」且「日期未設定」時觸發，自動尋找30天內第一個有空位的日子與時間
   useEffect(() => {
     if (bookingStep === 'form' && bookingData.storeId && !bookingData.date) {
-      const autoSelectDateAndTime = () => {
+      
+      const findFirstSlot = () => {
         const today = new Date();
         const maxDays = MAX_BOOKING_DAYS;
+        const requiredDuration = calcTotalDuration();
 
         for (let i = 0; i < maxDays; i++) {
           const d = new Date(today);
@@ -370,38 +392,32 @@ export default function App() {
           const day = String(d.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}`;
 
-          // 1. 檢查是否公休
-          const isHoliday = (shopSettings.holidays || []).some(h => 
-            h.date === dateStr && (h.storeId === 'all' || String(h.storeId) === String(bookingData.storeId))
-          );
-          if (isHoliday) continue;
-
-          // 2. 檢查該日期是否有任何空檔
-          const firstAvailableTime = TIME_SLOTS.find(t => !isTimeSlotFull(dateStr, t));
-          
-          if (firstAvailableTime) {
-            // 找到空檔！設定日期與時間，並跳出迴圈
-            setBookingData(prev => ({ ...prev, date: dateStr, time: firstAvailableTime }));
-            return;
+          // 使用 checkAvailability 來檢查每個時段
+          for (const timeStr of TIME_SLOTS) {
+             const isAvailable = checkAvailability(
+               bookingData.storeId, 
+               dateStr, 
+               timeStr, 
+               requiredDuration, 
+               allBookings, 
+               shopSettings
+             );
+             
+             if (isAvailable) {
+               // 找到第一個可用時段！
+               setBookingData(prev => ({ ...prev, date: dateStr, time: timeStr }));
+               return; // 結束搜尋
+             }
           }
         }
       };
 
-      if (shopSettings.stores.length > 0) {
-        autoSelectDateAndTime();
+      // 確保設定已加載才執行
+      if (shopSettings.stores.length > 0 && allBookings) {
+        findFirstSlot();
       }
     }
   }, [bookingStep, bookingData.storeId, bookingData.date, shopSettings, allBookings, selectedItem, selectedAddon]);
-
-  // 當使用者「手動點選日期」改變時，若時間被清空，也嘗試自動選該日第一個時間 (UX優化)
-  useEffect(() => {
-    if (bookingStep === 'form' && bookingData.date && !bookingData.time) {
-       const firstAvailableTime = TIME_SLOTS.find(t => !isTimeSlotFull(bookingData.date, t));
-       if (firstAvailableTime) {
-         setBookingData(prev => ({ ...prev, time: firstAvailableTime }));
-       }
-    }
-  }, [bookingData.date]); // 僅監聽日期變動 (且時間為空時)
 
   const saveShopSettings = async (newSettings) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newSettings);
