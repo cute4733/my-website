@@ -357,9 +357,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <h1 className="text-xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E]" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
-          <div className="flex gap-6 text-sm tracking-widest font-medium uppercase items-center">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between transition-all duration-300">
+          <h1 className="text-lg md:text-xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-3 md:mb-0" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
+          <div className="flex gap-4 md:gap-6 text-[11px] md:text-sm tracking-widest font-medium uppercase items-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={activeTab === 'home' ? 'text-[#C29591]' : ''}>首頁</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={activeTab === 'notice' ? 'text-[#C29591]' : ''}>須知</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={activeTab === 'catalog' ? 'text-[#C29591]' : ''}>款式</button>
@@ -377,7 +377,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="pt-20">
+      <main className="pt-28 md:pt-20">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
@@ -661,15 +661,6 @@ export default function App() {
                   </div>
                 </div>
              )}
-          </div>
-        ) : activeTab === 'home' ? (
-          <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
-            <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
-            <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
-              <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
-            </div>
-            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
-            <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
