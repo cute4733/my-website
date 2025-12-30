@@ -40,9 +40,10 @@ const timeToMinutes = (timeStr) => {
 };
 
 // --- 子組件：款式卡片 ---
-const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSelectedAddon }) => {
+// 修改：移除傳入 setSelectedAddon，改為內部管理選擇，點擊預約時才回傳
+const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [localAddonId, setLocalAddonId] = useState('');
+  const [localAddonId, setLocalAddonId] = useState(''); // 卡片內部的選擇狀態
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
   const nextImg = (e) => {
@@ -55,11 +56,10 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
     setCurrentIdx((prev) => (prev - 1 + images.length) % images.length);
   };
 
-  const handleAddonChange = (e) => {
-    const addonId = e.target.value;
-    setLocalAddonId(addonId);
-    const addon = addons.find(a => a.id === addonId);
-    setSelectedAddon(addon || null);
+  // 處理按鈕點擊：將款式與選中的加購品一起回傳給 App
+  const handleBookingClick = () => {
+    const selectedAddonObj = addons.find(a => a.id === localAddonId) || null;
+    onBook(item, selectedAddonObj);
   };
 
   return (
@@ -90,7 +90,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
         
         <select 
           className={`w-full text-[11px] border py-3 px-4 bg-[#FAF9F6] mb-8 outline-none text-[#463E3E] transition-colors ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
-          onChange={handleAddonChange}
+          onChange={(e) => setLocalAddonId(e.target.value)}
           value={localAddonId}
         >
           <option value="">請選擇指甲現況 (必選)</option>
@@ -103,7 +103,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, setSele
 
         <button 
           disabled={!localAddonId} 
-          onClick={() => onBook(item)} 
+          onClick={handleBookingClick} 
           className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
           {!localAddonId ? '請先選擇現況' : '點此預約'}
@@ -178,7 +178,7 @@ export default function App() {
 
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedAddon, setSelectedAddon] = useState(null);
+  const [selectedAddon, setSelectedAddon] = useState(null); // 全域選中的加購品
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -285,11 +285,12 @@ export default function App() {
     return matchStyle && matchPrice;
   });
 
+  // 計算邏輯：確保使用選中的 Addon 進行計算
   const calcTotalAmount = () => (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
   // 驗證邏輯
-  const isNameInvalid = /\d/.test(bookingData.name); // 檢查是否包含數字
+  const isNameInvalid = /\d/.test(bookingData.name);
   const isPhoneInvalid = bookingData.phone.length > 0 && bookingData.phone.length !== 10;
   const isFormValid = 
     bookingData.name.trim() !== '' && 
@@ -445,7 +446,7 @@ export default function App() {
                   <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
                     <span className="text-gray-400">預計總時長</span>
                     <span className="font-medium text-[#463E3E]">
-                      {(Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0)} 分鐘
+                      {calcTotalDuration()} 分鐘
                     </span>
                   </div>
                 </div>
@@ -454,7 +455,7 @@ export default function App() {
                   <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
                   <div className="text-2xl font-bold text-[#C29591] leading-none">
                     <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
-                    {((Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0)).toLocaleString()}
+                    {calcTotalAmount().toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -488,8 +489,14 @@ export default function App() {
                 <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
                   onEdit={(i) => {setEditingItem(i); setFormData(i); setIsUploadModalOpen(true);}}
                   onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
-                  onBook={(i) => { setSelectedItem(i); setSelectedAddon(null); setBookingStep('form'); window.scrollTo(0,0); }}
-                  addons={addons} setSelectedAddon={setSelectedAddon}
+                  // 修正：將加購品物件一併傳遞給 App
+                  onBook={(i, addon) => { 
+                    setSelectedItem(i); 
+                    setSelectedAddon(addon); // 確保狀態被設定
+                    setBookingStep('form'); 
+                    window.scrollTo(0,0); 
+                  }}
+                  addons={addons}
                 />
               ))}
             </div>
