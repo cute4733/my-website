@@ -21,7 +21,6 @@ const appId = 'uniwawa01';
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-// const CLEANING_TIME = 20; // 移除全域常數，改為動態讀取
 const DEFAULT_CLEANING_TIME = 20; // 預設值
 
 const generateTimeSlots = () => {
@@ -234,8 +233,9 @@ export default function App() {
   const [shopSettings, setShopSettings] = useState({ stores: [], staff: [], holidays: [] });
   const [newHolidayInput, setNewHolidayInput] = useState({ date: '', storeId: 'all' });
   const [newStoreInput, setNewStoreInput] = useState('');
-  const [newStoreCleaningTime, setNewStoreCleaningTime] = useState(20); // 新增：設定清潔時間狀態
+  const [newStoreCleaningTime, setNewStoreCleaningTime] = useState(20); 
   
+  // 管理中心狀態
   const [managerTab, setManagerTab] = useState('stores'); 
   const [bookingViewMode, setBookingViewMode] = useState('list'); 
   const [adminSelectedDate, setAdminSelectedDate] = useState('');
@@ -247,6 +247,7 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
   
+  // paymentMethod: '門市付款'
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -294,7 +295,7 @@ export default function App() {
 
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
-  // --- 修正：動態取得門市清潔時間 ---
+  // --- 動態取得門市整備時間 ---
   const getStoreCleaningTime = (sId) => {
     const s = (shopSettings.stores || []).find(i => i.id === sId);
     return Number(s?.cleaningTime) || DEFAULT_CLEANING_TIME;
@@ -312,7 +313,7 @@ export default function App() {
 
     if (availableStaffCount <= 0) return true;
 
-    // 使用該門市設定的清潔時間
+    // 使用該門市設定的整備時間
     const specificCleaningTime = getStoreCleaningTime(bookingData.storeId);
 
     const startA = timeToMinutes(checkTimeStr);
@@ -323,7 +324,6 @@ export default function App() {
       if (b.storeId !== bookingData.storeId) return false;
       
       const startB = timeToMinutes(b.time);
-      // 現有訂單結束時間也要加上該店的清潔時間
       const endB = startB + (Number(b.totalDuration) || 90) + specificCleaningTime;
       return (startA < endB) && (startB < endA);
     });
@@ -488,7 +488,8 @@ export default function App() {
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
-          <h1 className="text-3xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
+          {/* 修改：UNIWAWA 置中 (text-center)，桌面版靠左 (md:text-left) */}
+          <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'home' ? 'text-[#C29591]' : ''}`}>首頁</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
@@ -966,33 +967,40 @@ export default function App() {
                       value={newStoreInput} 
                       onChange={e => setNewStoreInput(e.target.value)}
                     />
-                    <input 
-                      type="number" 
-                      className="w-24 border p-2 text-xs outline-none" 
-                      placeholder="清潔(分)" 
-                      value={newStoreCleaningTime} 
-                      onChange={e => setNewStoreCleaningTime(e.target.value)}
-                    />
                     <button onClick={() => {
                       if(!newStoreInput) return;
-                      const newStore = { id: Date.now().toString(), name: newStoreInput, cleaningTime: newStoreCleaningTime };
+                      const newStore = { id: Date.now().toString(), name: newStoreInput, cleaningTime: 20 };
                       saveShopSettings({ ...shopSettings, stores: [...shopSettings.stores, newStore] });
                       setNewStoreInput('');
-                      setNewStoreCleaningTime(20);
                     }} className="bg-[#463E3E] text-white px-4 text-xs">新增</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {shopSettings.stores.map(store => (
-                      <div key={store.id} className="border p-4 flex justify-between items-center bg-white">
-                        <div>
-                          <span className="font-bold text-xs">{store.name}</span>
-                          <div className="text-[10px] text-gray-400">清潔: {store.cleaningTime || 20}分</div>
+                      <div key={store.id} className="border p-4 bg-white shadow-sm hover:border-[#C29591] transition-colors group">
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="font-bold text-sm text-[#463E3E] tracking-widest">{store.name}</span>
+                          <button onClick={() => {
+                            if(confirm('確定刪除此門市？相關人員與預約將受影響。')) {
+                              saveShopSettings({ ...shopSettings, stores: shopSettings.stores.filter(s => s.id !== store.id) });
+                            }
+                          }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
                         </div>
-                        <button onClick={() => {
-                          if(confirm('確定刪除此門市？相關人員與預約將受影響。')) {
-                            saveShopSettings({ ...shopSettings, stores: shopSettings.stores.filter(s => s.id !== store.id) });
-                          }
-                        }}><Trash2 size={14} className="text-gray-300 hover:text-red-500"/></button>
+                        <div className="flex items-center gap-2 bg-[#FAF9F6] p-2 rounded">
+                           <Clock size={12} className="text-gray-400"/>
+                           <span className="text-[10px] text-gray-500 whitespace-nowrap">整備時間:</span>
+                           <input 
+                             type="number" 
+                             className="w-10 bg-white border border-gray-200 text-center text-xs p-1 outline-none focus:border-[#C29591]"
+                             defaultValue={store.cleaningTime || 20}
+                             onBlur={(e) => {
+                               const val = Number(e.target.value);
+                               if(val < 0) return;
+                               const updatedStores = shopSettings.stores.map(s => s.id === store.id ? {...s, cleaningTime: val} : s);
+                               saveShopSettings({...shopSettings, stores: updatedStores});
+                             }}
+                           />
+                           <span className="text-[10px] text-gray-400">分</span>
+                        </div>
                       </div>
                     ))}
                   </div>
