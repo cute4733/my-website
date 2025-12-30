@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, MessageCircle, Calendar } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -19,6 +19,7 @@ const appId = 'uniwawa01';
 
 // --- 常數設定 ---
 const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
+const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const CLEANING_TIME = 20;
 
@@ -577,7 +578,6 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'search' ? ( 
-          // --- 雙重驗證查詢預約頁面 ---
           <div className="max-w-lg mx-auto py-12 px-6">
              <div className="text-center mb-12">
                 <h2 className="text-xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
@@ -668,16 +668,27 @@ export default function App() {
             <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Beyond<br/>Expectation</h2>
+            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
-            <div className="flex flex-wrap gap-4 justify-center border-b border-[#EAE7E2] pb-8">
-               {STYLE_CATEGORIES.map(c => (
-                 <button key={c} onClick={() => setStyleFilter(c)} className={`text-[10px] tracking-widest px-4 py-1 ${styleFilter===c ? 'text-[#C29591] font-bold underline underline-offset-8' : 'text-gray-400'}`}>{c}</button>
-               ))}
+            <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
+                <div className="flex flex-wrap gap-4 justify-center items-center">
+                   <span className="text-[10px] text-gray-300 tracking-widest mr-2">STYLE</span>
+                   {STYLE_CATEGORIES.map(c => (
+                     <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{c}</button>
+                   ))}
+                </div>
+
+                <div className="flex flex-wrap gap-4 justify-center items-center">
+                   <span className="text-[10px] text-gray-300 tracking-widest mr-2">PRICE</span>
+                   {PRICE_CATEGORIES.map(p => (
+                     <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{p}</button>
+                   ))}
+                </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
               {filteredItems.map(item => (
                 <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
@@ -685,7 +696,7 @@ export default function App() {
                   onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
                   onBook={(i, addon) => { 
                     setSelectedItem(i); 
-                    setSelectedAddon(addon); // 確保狀態被設定
+                    setSelectedAddon(addon); 
                     setBookingStep('form'); 
                     window.scrollTo(0,0); 
                   }}
@@ -720,15 +731,11 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
-              
-              {/* --- 1. 加購品管理區塊 --- */}
               <section className="space-y-6">
                 <div className="border-l-4 border-[#C29591] pl-4">
                   <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品設定 (指甲現況)</h4>
                   <p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「延甲」等額外服務的金額與所需時間，顧客預約時可選。</p>
                 </div>
-
-                {/* 新增加購品表單 */}
                 <form onSubmit={handleAddAddon} className="bg-[#FAF9F6] p-5 border border-[#EAE7E2] grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                   <div>
                     <label className="text-[10px] text-gray-400 block mb-1">名稱 (如：現場卸甲)</label>
@@ -744,8 +751,6 @@ export default function App() {
                   </div>
                   <button className="bg-[#463E3E] text-white py-2.5 text-[10px] tracking-widest uppercase hover:bg-[#C29591] transition-colors">新增項目</button>
                 </form>
-
-                {/* 現有加購品列表 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {addons.map(addon => (
                     <div key={addon.id} className="border border-[#EAE7E2] p-4 flex justify-between items-center bg-white shadow-sm hover:border-[#C29591] transition-colors">
@@ -762,7 +767,6 @@ export default function App() {
                 </div>
               </section>
 
-              {/* --- 2. 人員管理區塊 --- */}
               <section className="space-y-6 pt-6 border-t border-dashed">
                 <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-4">
                   <div>
@@ -774,7 +778,6 @@ export default function App() {
                     if(name) saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, leaveDates: [] }] });
                   }} className="text-[10px] bg-[#C29591] text-white px-4 py-2 rounded-full hover:bg-[#463E3E] transition-colors">+ 新增人員</button>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {(shopSettings.staff || []).map(staff => (
                     <div key={staff.id} className="bg-[#FAF9F6] border border-[#EAE7E2] p-5 space-y-4">
@@ -816,7 +819,6 @@ export default function App() {
                 </div>
               </section>
 
-              {/* --- 3. 全店公休與預約清單 --- */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 border-t border-dashed pt-6">
                 <section className="space-y-6">
                     <h4 className="text-sm font-bold tracking-widest border-l-4 border-[#C29591] pl-4 uppercase">全店公休日設定</h4>
