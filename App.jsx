@@ -22,7 +22,7 @@ const STYLE_CATEGORIES = ['全部', '極簡氣質', '華麗鑽飾', '藝術手�
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; // 預設值
-const MAX_BOOKING_DAYS = 30; // 【新增規則】最大可預約天數
+const MAX_BOOKING_DAYS = 30; // 最大可預約天數
 
 const generateTimeSlots = () => {
   const slots = [];
@@ -139,7 +139,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // 【新增規則】計算最大可預約日期 (Today + 30 days)
   const maxDate = new Date(today);
   maxDate.setDate(today.getDate() + MAX_BOOKING_DAYS);
 
@@ -159,8 +158,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
       
       const isPastOrToday = targetDate <= today;
-
-      // 【新增規則】檢查是否超過30天
       const isTooFar = targetDate > maxDate;
       
       const isDisabled = isHoliday || isAllOnLeave || isPastOrToday || !selectedStoreId || isTooFar;
@@ -190,7 +187,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId 
         {WEEKDAYS.map(w => <div key={w} className="w-full aspect-square flex items-center justify-center text-xs text-gray-400 font-bold">{w}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-2">{renderDays()}</div>
-      {/* 提示文字 */}
       <div className="text-[10px] text-center text-gray-400 mt-4 tracking-widest">僅開放 {MAX_BOOKING_DAYS} 天內預約</div>
     </div>
   );
@@ -251,7 +247,6 @@ export default function App() {
   const [shopSettings, setShopSettings] = useState({ stores: [], staff: [], holidays: [] });
   const [newHolidayInput, setNewHolidayInput] = useState({ date: '', storeId: 'all' });
   const [newStoreInput, setNewStoreInput] = useState('');
-  const [newStoreCleaningTime, setNewStoreCleaningTime] = useState(20); 
   
   // 管理中心狀態
   const [managerTab, setManagerTab] = useState('stores'); 
@@ -265,7 +260,6 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
   
-  // paymentMethod: '門市付款'
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -311,6 +305,7 @@ export default function App() {
     );
   }, [user]);
 
+  // 計算新預約的「款式+加購」總時長 (不含整備，用於 UI 顯示與資料庫存檔)
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
   const getStoreCleaningTime = (sId) => {
@@ -318,9 +313,11 @@ export default function App() {
     return Number(s?.cleaningTime) || DEFAULT_CLEANING_TIME;
   };
 
+  // --- 【修正1】優化時段檢查邏輯，納入整備與加購時間 ---
   const isTimeSlotFull = (date, checkTimeStr) => {
     if (!date || !checkTimeStr || !bookingData.storeId) return false;
     
+    // 如果當天設定為全店不可預約 (這裡保留原邏輯，視需求調整)
     const todayStr = getTodayString();
     if (date === todayStr) return true;
     
@@ -330,17 +327,26 @@ export default function App() {
 
     if (availableStaffCount <= 0) return true;
 
-    const specificCleaningTime = getStoreCleaningTime(bookingData.storeId);
+    // 1. 獲取該店整備時間 (強制轉為數字)
+    const specificCleaningTime = Number(getStoreCleaningTime(bookingData.storeId)) || 0;
 
+    // 2. 計算「新預約」佔用的起訖時間 (開始 ~ 款式+加購+整備)
     const startA = timeToMinutes(checkTimeStr);
-    const endA = startA + calcTotalDuration() + specificCleaningTime;
+    const durationA = calcTotalDuration(); // 包含款式與加購
+    const endA = startA + durationA + specificCleaningTime; // 真正的結束時間包含整備
 
+    // 3. 比對現有訂單
     const concurrentBookings = allBookings.filter(b => {
       if (b.date !== date) return false;
       if (String(b.storeId) !== String(bookingData.storeId)) return false;
       
       const startB = timeToMinutes(b.time);
-      const endB = startB + (Number(b.totalDuration) || 90) + specificCleaningTime;
+      // 確認資料庫中的 totalDuration 是否為數字，若無則預設 90
+      const durationB = Number(b.totalDuration) || 90; 
+      // 現有訂單結束時間也必須加上整備時間
+      const endB = startB + durationB + specificCleaningTime;
+
+      // 判斷重疊公式：(新開始 < 舊結束) && (舊開始 < 新結束)
       return (startA < endB) && (startB < endA);
     });
 
@@ -359,7 +365,6 @@ export default function App() {
         let checkDate = new Date(today);
         let found = false;
         
-        // 搜尋未來 30 天
         for (let i = 0; i < MAX_BOOKING_DAYS; i++) {
           const y = checkDate.getFullYear();
           const m = String(checkDate.getMonth() + 1).padStart(2, '0');
@@ -422,6 +427,7 @@ export default function App() {
   const handleConfirmBooking = async () => {
     setIsSubmitting(true);
     const finalAmount = (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
+    // 這裡存入資料庫的是服務總時長 (不含整備，整備是動態計算的)
     const finalDuration = (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
     const selectedStore = shopSettings.stores.find(s => s.id === bookingData.storeId);
 
@@ -541,9 +547,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
-        <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
+        {/* --- 【修正2】手機版置中修正：將 items-start 改為 items-center --- */}
+        <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between transition-all duration-300">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
-          <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
+          
+          {/* --- 【修正2】手機版置中修正：加入 justify-center --- */}
+          <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center justify-center md:justify-end w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'home' ? 'text-[#C29591]' : ''}`}>首頁</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
@@ -801,93 +810,93 @@ export default function App() {
           </div>
         ) : activeTab === 'search' ? ( 
           <div className="max-w-lg mx-auto py-12 px-6">
-             <div className="text-center mb-12">
+              <div className="text-center mb-12">
                 <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
                 <p className="text-xs text-gray-400 tracking-widest">請輸入預約時的姓名與電話以查詢</p>
-             </div>
+              </div>
 
-             <form onSubmit={handleSearchBooking} className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
-               <input 
-                 type="text" 
-                 placeholder="預約姓名 (Name)" 
-                 className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
-                 value={searchName}
-                 onChange={e => setSearchName(e.target.value)}
-               />
-               <input 
-                 type="tel" 
-                 placeholder="預約電話 (Phone)" 
-                 className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
-                 value={searchPhone}
-                 onChange={e => setSearchPhone(e.target.value)}
-               />
-               <button className="bg-[#463E3E] text-white w-full py-3 mt-2 text-xs tracking-widest hover:bg-[#C29591] transition-colors flex items-center justify-center gap-2">
-                 <Search size={14}/> 查詢預約
-               </button>
-             </form>
+              <form onSubmit={handleSearchBooking} className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
+                <input 
+                  type="text" 
+                  placeholder="預約姓名 (Name)" 
+                  className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
+                  value={searchName}
+                  onChange={e => setSearchName(e.target.value)}
+                />
+                <input 
+                  type="tel" 
+                  placeholder="預約電話 (Phone)" 
+                  className="border-b border-[#EAE7E2] py-3 px-2 outline-none bg-transparent focus:border-[#C29591] text-xs"
+                  value={searchPhone}
+                  onChange={e => setSearchPhone(e.target.value)}
+                />
+                <button className="bg-[#463E3E] text-white w-full py-3 mt-2 text-xs tracking-widest hover:bg-[#C29591] transition-colors flex items-center justify-center gap-2">
+                  <Search size={14}/> 查詢預約
+                </button>
+              </form>
 
-             {searchResult && (
-                <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
-                  <div className="h-1 w-full bg-[#C29591]"></div>
-                  {(() => {
-                    const linkedItem = cloudItems.find(i => i.title === searchResult.itemTitle);
-                    return linkedItem?.images?.[0] ? (
-                      <div className="w-full h-40 relative bg-gray-50 group">
-                        <img src={linkedItem.images[0]} className="w-full h-full object-cover" alt="booked-item" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-4">
-                          <div className="text-white">
-                            <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{linkedItem.category}</p>
-                            <h3 className="text-sm font-medium tracking-wide">{searchResult.itemTitle}</h3>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null;
-                  })()}
+              {searchResult && (
+                 <div className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
+                   <div className="h-1 w-full bg-[#C29591]"></div>
+                   {(() => {
+                     const linkedItem = cloudItems.find(i => i.title === searchResult.itemTitle);
+                     return linkedItem?.images?.[0] ? (
+                       <div className="w-full h-40 relative bg-gray-50 group">
+                         <img src={linkedItem.images[0]} className="w-full h-full object-cover" alt="booked-item" />
+                         <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-4">
+                           <div className="text-white">
+                             <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{linkedItem.category}</p>
+                             <h3 className="text-sm font-medium tracking-wide">{searchResult.itemTitle}</h3>
+                           </div>
+                         </div>
+                       </div>
+                     ) : null;
+                   })()}
 
-                  <div className="p-8">
-                    <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
-                      <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
-                      <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
-                        <span className="text-lg font-bold tracking-widest">{searchResult.date}</span>
-                        <span className="text-[#C29591]">•</span>
-                        <span className="text-xl font-bold tracking-widest">{searchResult.time}</span>
-                      </div>
-                      <div className="mt-2 text-xs font-bold text-[#C29591]">{searchResult.storeName}</div>
-                    </div>
+                   <div className="p-8">
+                     <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
+                       <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
+                       <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
+                         <span className="text-lg font-bold tracking-widest">{searchResult.date}</span>
+                         <span className="text-[#C29591]">•</span>
+                         <span className="text-xl font-bold tracking-widest">{searchResult.time}</span>
+                       </div>
+                       <div className="mt-2 text-xs font-bold text-[#C29591]">{searchResult.storeName}</div>
+                     </div>
 
-                    <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">顧客姓名</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.name}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">聯絡電話</span>
-                        <span className="font-medium font-mono">{searchResult.phone}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">加購項目</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.addonName}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">預計總時長</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.totalDuration} 分鐘</span>
-                      </div>
-                      <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
-                        <span className="text-gray-400">付款方式</span>
-                        <span className="font-medium text-[#463E3E]">{searchResult.paymentMethod || '門市付款'}</span>
-                      </div>
-                    </div>
+                     <div className="space-y-4 text-xs tracking-wide text-[#5C5555]">
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">顧客姓名</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.name}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">聯絡電話</span>
+                         <span className="font-medium font-mono">{searchResult.phone}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">加購項目</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.addonName}</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">預計總時長</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.totalDuration} 分鐘</span>
+                       </div>
+                       <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                         <span className="text-gray-400">付款方式</span>
+                         <span className="font-medium text-[#463E3E]">{searchResult.paymentMethod || '門市付款'}</span>
+                       </div>
+                     </div>
 
-                    <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
-                      <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
-                      <div className="text-2xl font-bold text-[#C29591] leading-none">
-                        <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
-                        {searchResult.totalAmount?.toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-             )}
+                     <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
+                       <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
+                       <div className="text-2xl font-bold text-[#C29591] leading-none">
+                         <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
+                         {searchResult.totalAmount?.toLocaleString()}
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+              )}
           </div>
         ) : activeTab === 'store' ? (
           <div className="max-w-4xl mx-auto py-16 px-6">
@@ -974,7 +983,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 管理彈窗：包含人員與【加購品設定】 */}
+      {/* 管理彈窗 */}
       {isBookingManagerOpen && (
         <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:w-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
@@ -1111,7 +1120,6 @@ export default function App() {
                       <button onClick={() => {
                         const name = prompt("請輸入美甲師姓名：");
                         if(name) {
-                          // 簡單 prompt 無法選門市，預設 assign 給第一個門市，後續可改 UI
                           const defaultStoreId = shopSettings.stores[0]?.id || '';
                           saveShopSettings({ ...shopSettings, staff: [...(shopSettings.staff || []), { id: Date.now().toString(), name, storeId: defaultStoreId, leaveDates: [] }] });
                         }
@@ -1200,7 +1208,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* --- 3. 預約管理區塊 (列表/月曆切換 + 匯出功能 + 門市篩選) --- */}
+              {/* --- 3. 預約管理區塊 --- */}
               {managerTab === 'bookings' && (
                 <section className="space-y-6 fade-in h-full flex flex-col">
                   <div className="flex justify-between items-center border-b border-dashed pb-4">
@@ -1264,7 +1272,6 @@ export default function App() {
                       {storeFilteredBookings.length === 0 && <p className="text-center text-gray-300 text-xs py-10">目前沒有預約資料</p>}
                     </div>
                   ) : (
-                    // 【修復】手機版月曆顯示不全：移除 h-full 與 overflow-hidden (僅桌面版保留)
                     <div className="flex flex-col md:flex-row gap-8 h-auto md:h-full">
                       <div className="w-full md:w-auto flex-shrink-0">
                         <AdminBookingCalendar 
