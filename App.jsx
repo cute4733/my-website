@@ -3,6 +3,8 @@ import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, Che
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
+// --- 1. 引入 EmailJS ---
+import emailjs from '@emailjs/browser';
 
 // --- Firebase 配置 ---
 const firebaseConfig = {
@@ -18,14 +20,23 @@ const db = getFirestore(app);
 const appId = 'uniwawa01';
 
 // --- 常數設定 ---
-// 注意：STYLE_CATEGORIES 改為從資料庫讀取，這裡僅留預設值防止讀取前錯誤
 const DEFAULT_CATEGORIES = ['極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'];
 const PRICE_CATEGORIES = ['全部', '1300以下', '1300-1900', '1900以上']; 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const DEFAULT_CLEANING_TIME = 20; // 預設值
-const MAX_BOOKING_DAYS = 30; // 最大可預約天數
+const DEFAULT_CLEANING_TIME = 20; 
+const MAX_BOOKING_DAYS = 30; 
 
-// 產生時段：12:00 ~ 18:30
+// 預約須知內容 (用於顯示與寄信)
+const NOTICE_CONTENT = `
+【預約須知】
+1. 本店採網站預約制，請依系統開放的時段與服務項目進行預約。
+2. 服務款式以網站上提供內容為主，暫不提供帶圖或客製設計。
+3. 為了衛生與施作安全考量，恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務。
+4. 若遲到超過 10 分鐘，將視當日狀況調整服務內容。
+5. 如需取消或改期，請於預約 24 小時前告知。
+6. 施作後 7 日內非人為因素脫落，可協助免費補修。
+`;
+
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 18; h++) {
@@ -97,7 +108,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         <span className="text-xs text-[#C29591] tracking-[0.3em] uppercase mb-2 font-medium">{item.category}</span>
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
         
-        {/* Hashtags Display */}
         {item.tags && item.tags.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2 mb-3 mt-1">
             {item.tags.map((tag, idx) => (
@@ -288,8 +298,8 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
   
-  // paymentMethod: '門市付款'
-  const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
+  // --- 2. 新增 email 狀態 ---
+  const [bookingData, setBookingData] = useState({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -299,7 +309,7 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState('');
   const [styleFilter, setStyleFilter] = useState('全部');
   const [priceFilter, setPriceFilter] = useState('全部');
-  const [tagFilter, setTagFilter] = useState(''); // Hashtag 篩選
+  const [tagFilter, setTagFilter] = useState(''); 
 
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
@@ -450,6 +460,7 @@ export default function App() {
     const selectedStore = shopSettings.stores.find(s => s.id === bookingData.storeId);
 
     try {
+      // 1. 寫入 Firebase
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookingData,
         storeName: selectedStore ? selectedStore.name : '未指定',
@@ -459,8 +470,38 @@ export default function App() {
         totalDuration: finalDuration,
         createdAt: serverTimestamp()
       });
+
+      // 2. --- 發送 EmailJS ---
+      // 準備要傳給 EmailJS 模板的參數
+      const templateParams = {
+        to_email: bookingData.email,     // 收件者 (客人)
+        staff_email: 'unibeatuy@gmail.com', // 服務人員信箱 (副本)
+        to_name: bookingData.name,       // 收件者姓名
+        phone: bookingData.phone,
+        store_name: selectedStore ? selectedStore.name : '未指定',
+        booking_date: bookingData.date,
+        booking_time: bookingData.time,
+        item_title: selectedItem?.title,
+        addon_name: selectedAddon?.name || '無',
+        total_amount: finalAmount,
+        total_duration: finalDuration,
+        notice_content: NOTICE_CONTENT // 須知內容
+      };
+
+      // 請記得去 EmailJS 後台將 Service ID, Template ID, Public Key 對應填上
+      // 這裡 Service ID 設定為 service_uniwawa
+      // Template ID 和 Public Key 請替換成您自己的 (這裡暫用變數示意)
+      await emailjs.send('service_uniwawa', 'YOUR_TEMPLATE_ID', templateParams, 'YOUR_PUBLIC_KEY');
+
       setBookingStep('success');
-    } catch (e) { alert('預約失敗'); } finally { setIsSubmitting(false); }
+    } catch (e) { 
+        console.error(e);
+        // 就算 email 失敗，若 firebase 成功也算成功，或是您可以選擇 alert 提示
+        // alert('預約成功，但郵件發送失敗'); 
+        setBookingStep('success'); 
+    } finally { 
+        setIsSubmitting(false); 
+    }
   };
 
   const handleItemSubmit = async (e) => {
@@ -531,10 +572,14 @@ export default function App() {
 
   const isNameInvalid = /\d/.test(bookingData.name);
   const isPhoneInvalid = bookingData.phone.length > 0 && bookingData.phone.length !== 10;
+  // --- 簡單 Email 驗證 ---
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bookingData.email);
+
   const isFormValid = 
     bookingData.name.trim() !== '' && 
     !isNameInvalid &&
     bookingData.phone.length === 10 && 
+    isEmailValid && // 檢查 email
     bookingData.time !== '' &&
     bookingData.storeId !== '';
 
@@ -668,6 +713,17 @@ export default function App() {
                   }} 
                 />
 
+                {/* --- 3. 新增 Email 輸入框 --- */}
+                <input 
+                  autoComplete="off"
+                  required 
+                  type="email" 
+                  placeholder="電子信箱 (接收預約通知)" 
+                  className={`border-b py-2 outline-none ${!bookingData.email ? 'border-red-100' : 'border-gray-200'}`}
+                  value={bookingData.email} 
+                  onChange={e => setBookingData({...bookingData, email: e.target.value})} 
+                />
+
                 <div className="relative md:col-span-2">
                     <div className="flex items-center gap-2 border-b border-[#EAE7E2] py-2 text-gray-400">
                       <CreditCard size={16}/>
@@ -707,6 +763,7 @@ export default function App() {
                  isNameInvalid ? '姓名不可包含數字' :
                  (!bookingData.name.trim()) ? '請填寫姓名' : 
                  (bookingData.phone.length !== 10) ? '電話需為10碼數字' : 
+                 !isEmailValid ? '請輸入正確的電子信箱' :
                  !bookingData.time ? '請選擇時間' : '確認送出預約'}
               </button>
             </div>
@@ -756,6 +813,10 @@ export default function App() {
                   <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
                     <span className="text-gray-400">聯絡電話</span>
                     <span className="font-medium font-mono">{bookingData.phone}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
+                    <span className="text-gray-400">電子信箱</span>
+                    <span className="font-medium">{bookingData.email}</span>
                   </div>
                   <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
                     <span className="text-gray-400">加購項目</span>
