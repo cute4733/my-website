@@ -488,15 +488,13 @@ export default function App() {
         notice_content: NOTICE_CONTENT // 須知內容
       };
 
-      // 請記得去 EmailJS 後台將 Service ID, Template ID, Public Key 對應填上
-      // 這裡 Service ID 設定為 service_uniwawa
-      // Template ID 和 Public Key 請替換成您自己的 (這裡暫用變數示意)
-      await emailjs.send('service_uniwawa', 'YOUR_TEMPLATE_ID', templateParams, 'YOUR_PUBLIC_KEY');
+      // 使用您提供的 Service ID, Template ID 和 Public Key
+      await emailjs.send('service_uniwawa', 'template_d5tq1z9', templateParams, 'ehbGdRtZaXWft7qLM');
 
       setBookingStep('success');
     } catch (e) { 
         console.error(e);
-        // 就算 email 失敗，若 firebase 成功也算成功，或是您可以選擇 alert 提示
+        // 就算 email 失敗，若 firebase 成功也算成功
         // alert('預約成功，但郵件發送失敗'); 
         setBookingStep('success'); 
     } finally { 
@@ -1535,12 +1533,12 @@ export default function App() {
               {/* 修改部分：將價格與服務時間並列顯示，並加上明確標題 */}
               <div className="flex gap-4">
                 <div className="w-1/2">
-                   <label className="text-xs text-gray-400 mb-1 block">價格 (NT$)</label>
-                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="輸入價格" />
+                    <label className="text-xs text-gray-400 mb-1 block">價格 (NT$)</label>
+                    <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="輸入價格" />
                 </div>
                 <div className="w-1/2">
-                   <label className="text-xs text-gray-400 mb-1 block">服務時間 (分鐘)</label>
-                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="預設 90" />
+                    <label className="text-xs text-gray-400 mb-1 block">服務時間 (分鐘)</label>
+                    <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="預設 90" />
                 </div>
               </div>
 
