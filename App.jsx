@@ -1305,7 +1305,7 @@ export default function App() {
                     {/* 卸甲列表 */}
                     <div className="space-y-2 mt-4">
                       <h5 className="text-xs font-bold text-[#463E3E] border-b pb-1">卸甲項目</h5>
-                      <div className="max-h-32 overflow-y-auto pr-1 space-y-2">
+                      <div className="space-y-2">
                       {addons.filter(a => a.type !== 'care').map(addon => (
                         <div key={addon.id} className="border border-[#EAE7E2] p-3 flex justify-between items-center bg-white shadow-sm">
                           <div className="space-y-0.5">
@@ -1323,7 +1323,7 @@ export default function App() {
                     {/* 保養列表 */}
                     <div className="space-y-2 mt-4">
                       <h5 className="text-xs font-bold text-[#463E3E] border-b pb-1">保養項目</h5>
-                      <div className="max-h-32 overflow-y-auto pr-1 space-y-2">
+                      <div className="space-y-2">
                       {addons.filter(a => a.type === 'care').map(addon => (
                         <div key={addon.id} className="border border-[#EAE7E2] p-3 flex justify-between items-center bg-white shadow-sm">
                           <div className="space-y-0.5">
