@@ -472,11 +472,10 @@ export default function App() {
       });
 
       // 2. --- 發送 EmailJS ---
-      // 準備要傳給 EmailJS 模板的參數
       const templateParams = {
-        to_email: bookingData.email,     // 收件者 (客人)
-        staff_email: 'unibeatuy@gmail.com', // 服務人員信箱 (副本)
-        to_name: bookingData.name,       // 收件者姓名
+        to_email: bookingData.email,     // 這裡對應 EmailJS 後台的 {{to_email}}
+        staff_email: 'unibeatuy@gmail.com',
+        to_name: bookingData.name,
         phone: bookingData.phone,
         store_name: selectedStore ? selectedStore.name : '未指定',
         booking_date: bookingData.date,
@@ -485,17 +484,20 @@ export default function App() {
         addon_name: selectedAddon?.name || '無',
         total_amount: finalAmount,
         total_duration: finalDuration,
-        notice_content: NOTICE_CONTENT // 須知內容
+        notice_content: NOTICE_CONTENT
       };
 
-      // 使用您提供的 Service ID, Template ID 和 Public Key
-      await emailjs.send('service_uniwawa', 'template_d5tq1z9', templateParams, 'ehbGdRtZaXWft7qLM');
+      console.log("正在發送郵件，參數為：", templateParams);
 
+      const response = await emailjs.send('service_uniwawa', 'template_d5tq1z9', templateParams, 'ehbGdRtZaXWft7qLM');
+      console.log('SUCCESS!', response.status, response.text);
+
+      alert('預約成功！確認信已發送。');
       setBookingStep('success');
+
     } catch (e) { 
-        console.error(e);
-        // 就算 email 失敗，若 firebase 成功也算成功
-        // alert('預約成功，但郵件發送失敗'); 
+        console.error("預約或寄信失敗:", e);
+        alert(`預約已記錄，但信件發送失敗。\n錯誤原因: ${JSON.stringify(e)}`);
         setBookingStep('success'); 
     } finally { 
         setIsSubmitting(false); 
@@ -629,6 +631,8 @@ export default function App() {
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
             <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult([]); setSearchKeyword('');}} className={`flex-shrink-0 ${activeTab === 'search' ? 'text-[#C29591]' : ''}`}>查詢</button>
             <button onClick={() => {setActiveTab('store'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'store' ? 'text-[#C29591]' : ''}`}>門市</button>
+            {/* 新增的聯絡按鈕 */}
+            <button onClick={() => {setActiveTab('contact'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'contact' ? 'text-[#C29591]' : ''}`}>聯絡</button>
             
             {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2] flex-shrink-0">
@@ -1042,6 +1046,28 @@ export default function App() {
             </div>
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
+          </div>
+        ) : activeTab === 'contact' ? (
+          // 新增的聯絡我們頁面
+          <div className="max-w-2xl mx-auto py-16 px-6">
+             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">CONTACT US / 聯絡我們</h2>
+             <div className="bg-white border border-[#EAE7E2] shadow-sm p-12 text-center">
+                <div className="flex justify-center mb-6">
+                   <div className="bg-[#FAF9F6] p-4 rounded-full">
+                      <MessageCircle size={48} className="text-[#463E3E]" />
+                   </div>
+                </div>
+                <h3 className="text-lg font-medium tracking-widest text-[#463E3E] mb-2">官方 LINE 帳號</h3>
+                <p className="text-xs text-gray-400 mb-8 tracking-widest">ID: @uniwawa_beauty</p>
+                <a 
+                  href="https://lin.ee/mdzCUWz" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-block bg-[#463E3E] text-white px-12 py-4 text-xs tracking-[0.2em] font-medium hover:bg-[#C29591] transition-colors"
+                >
+                  點此加入好友
+                </a>
+             </div>
           </div>
         ) : (
           // Catalog Tab
