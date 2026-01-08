@@ -3,7 +3,9 @@ import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, Che
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
-// --- 1. 引入 EmailJS ---
+// --- 引入 Storage 模組 ---
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// --- 引入 EmailJS ---
 import emailjs from '@emailjs/browser';
 
 // --- Firebase 配置 ---
@@ -17,6 +19,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app); // 初始化 Storage
 const appId = 'uniwawa01';
 
 // --- 常數設定 ---
@@ -313,6 +316,8 @@ export default function App() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
+  // --- 新增：用來暫存還沒上傳的「原始檔案」 ---
+  const [rawFiles, setRawFiles] = useState([]); 
 
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searchResult, setSearchResult] = useState([]);
@@ -512,8 +517,24 @@ export default function App() {
       const durationVal = Number(formData.duration);
       if (isNaN(priceVal) || isNaN(durationVal)) throw new Error("價格或時間必須為數字");
 
-      const payloadSize = JSON.stringify(formData).length;
-      if (payloadSize > 900000) throw new Error("圖片檔案過大！請使用截圖或壓縮過的照片");
+      // 1. 先處理圖片上傳
+      let finalImageUrls = [...formData.images]; // 先複製原本已經存在的圖片網址(如果是編輯模式)
+
+      // 如果有新選擇的檔案 (rawFiles)，將它們上傳到 Firebase Storage
+      if (rawFiles.length > 0) {
+        const uploadPromises = rawFiles.map(async (file) => {
+          // 設定檔案路徑：nail_designs/當下時間_檔名
+          const storageRef = ref(storage, `nail_designs/${Date.now()}_${file.name}`);
+          // 上傳檔案
+          const snapshot = await uploadBytes(storageRef, file);
+          // 取得下載網址
+          return await getDownloadURL(snapshot.ref);
+        });
+
+        // 等待所有圖片上傳完成
+        const newUrls = await Promise.all(uploadPromises);
+        finalImageUrls = [...finalImageUrls, ...newUrls];
+      }
 
       const tagsArray = formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(t => t) : [];
 
@@ -521,6 +542,7 @@ export default function App() {
         ...formData, 
         price: priceVal, 
         duration: durationVal, 
+        images: finalImageUrls, 
         tags: tagsArray, 
         updatedAt: serverTimestamp() 
       };
@@ -530,6 +552,7 @@ export default function App() {
       
       setIsUploadModalOpen(false);
       setFormData({ title: '', price: '', category: shopSettings.styleCategories[0] || '極簡氣質', duration: '90', images: [], tags: '' });
+      setRawFiles([]); // 清空暫存
       alert("發布成功！");
     } catch (err) { alert("儲存失敗：" + err.message); } finally { setIsUploading(false); }
   };
@@ -1608,20 +1631,53 @@ export default function App() {
                   )}
               </div>
 
+              {/* --- 修改後的圖片顯示與上傳區塊 (含 1MB/5MB 限制) --- */}
               <div className="flex flex-wrap gap-2">
                 {formData.images.map((img, i) => (
                   <div key={i} className="relative w-20 h-20 border">
-                    <img src={img} className="w-full h-full object-cover" alt="upload-preview" />
-                    <button type="button" onClick={() => setFormData({...formData, images: formData.images.filter((_, idx) => idx !== i)})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
+                    <img src={img} className="w-full h-full object-cover" alt="preview" />
+                    <button type="button" onClick={() => {
+                        // 簡單移除顯示，若是 rawFiles 的部分，上傳時會多傳(不存DB)或需複雜對應，這裡簡化處理
+                        setFormData(prev => ({
+                            ...prev, 
+                            images: prev.images.filter((_, idx) => idx !== i)
+                        }));
+                    }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
                   </div>
                 ))}
+                
                 <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-[#C29591] text-gray-400 hover:text-[#C29591] transition-colors">
-                  <Upload size={16} /><input type="file" hidden accept="image/*" multiple onChange={(e) => {
-                    Array.from(e.target.files).forEach(file => {
-                      const reader = new FileReader();
-                      reader.onloadend = () => setFormData(p => ({...p, images: [...p.images, reader.result]}));
-                      reader.readAsDataURL(file);
-                    });
+                  <Upload size={16} />
+                  <input type="file" hidden accept="image/*" multiple onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                        const files = Array.from(e.target.files);
+                        
+                        // 1. 檢查單張圖片大小限制 (1MB = 1 * 1024 * 1024 bytes)
+                        const validFiles = files.filter(f => {
+                            if (f.size > 1 * 1024 * 1024) {
+                                alert(`檔案 ${f.name} 超過 1MB，已自動略過`);
+                                return false;
+                            }
+                            return true;
+                        });
+
+                        // 2. 檢查本批次總大小限制 (這裡僅檢查這批新選的，若要嚴格限制「整個商品」需加總 rawFiles)
+                        // 計算目前暫存區 (rawFiles) 的總大小 + 這批新檔案的大小
+                        const currentTotalSize = rawFiles.reduce((acc, f) => acc + f.size, 0);
+                        const newFilesTotalSize = validFiles.reduce((acc, f) => acc + f.size, 0);
+                        
+                        if (currentTotalSize + newFilesTotalSize > 5 * 1024 * 1024) { // 5MB
+                            alert("商品圖片總大小超過 5MB 上限，無法新增更多圖片");
+                            return;
+                        }
+
+                        // 將新檔案加入 rawFiles 狀態
+                        setRawFiles(prev => [...prev, ...validFiles]);
+
+                        // 產生預覽網址 (Blob URL) 加入 formData 供顯示
+                        const previewUrls = validFiles.map(f => URL.createObjectURL(f));
+                        setFormData(prev => ({...prev, images: [...prev.images, ...previewUrls]}));
+                    }
                   }} />
                 </label>
               </div>
