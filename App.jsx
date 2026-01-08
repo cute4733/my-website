@@ -11,7 +11,7 @@ import emailjs from '@emailjs/browser';
 // --- Firebase 配置 ---
 const firebaseConfig = {
   apiKey: "AIzaSyBkFqTUwtC7MqZ6h4--2_1BmldXEg-Haiw",
-  authDomain: "uniwawa-beauty.com", // 已更新為正確的網域名稱
+  authDomain: "uniwawa-beauty.com", // 確認網域正確
   projectId: "uniwawa-beauty",
   storageBucket: "uniwawa-beauty.firebasestorage.app",
   appId: "1:1009617609234:web:3cb5466e79a81c1f1aaecb"
@@ -518,8 +518,9 @@ export default function App() {
       const durationVal = Number(formData.duration);
       if (isNaN(priceVal) || isNaN(durationVal)) throw new Error("價格或時間必須為數字");
 
-      // 1. 先處理圖片上傳
-      let finalImageUrls = [...formData.images]; // 先複製原本已經存在的圖片網址(如果是編輯模式)
+      // 1. 處理圖片上傳：
+      // --- 修正重點：只保留非 blob: 開頭的網址（即舊的真實網址），過濾掉預覽圖 ---
+      let finalImageUrls = formData.images.filter(url => !url.startsWith('blob:')); 
 
       // 如果有新選擇的檔案 (rawFiles)，將它們上傳到 Firebase Storage
       if (rawFiles.length > 0) {
@@ -1070,28 +1071,6 @@ export default function App() {
             </div>
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
-          </div>
-        ) : activeTab === 'contact' ? (
-          // 新增的聯絡我們頁面
-          <div className="max-w-2xl mx-auto py-16 px-6">
-             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">CONTACT US / 聯絡我們</h2>
-             <div className="bg-white border border-[#EAE7E2] shadow-sm p-12 text-center">
-                <div className="flex justify-center mb-6">
-                   <div className="bg-[#FAF9F6] p-4 rounded-full">
-                      <MessageCircle size={48} className="text-[#463E3E]" />
-                   </div>
-                </div>
-                <h3 className="text-lg font-medium tracking-widest text-[#463E3E] mb-2">官方 LINE 帳號</h3>
-                <p className="text-xs text-gray-400 mb-8 tracking-widest">ID: @uniwawa_beauty</p>
-                <a 
-                  href="https://lin.ee/mdzCUWz" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-block bg-[#463E3E] text-white px-12 py-4 text-xs tracking-[0.2em] font-medium hover:bg-[#C29591] transition-colors"
-                >
-                  點此加入好友
-                </a>
-             </div>
           </div>
         ) : (
           // Catalog Tab
