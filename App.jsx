@@ -1557,8 +1557,14 @@ export default function App() {
             <form onSubmit={handleItemSubmit} className="space-y-6">
               <input type="text" required className="w-full border-b py-2 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
               <div className="flex gap-4">
-                <input type="number" required className="w-1/2 border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="價格" />
-                <input type="number" required className="w-1/2 border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="分鐘" />
+                <div className="w-1/2">
+                   <label className="text-[10px] text-gray-400 block mb-1">價格 (NT$)</label>
+                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="0" />
+                </div>
+                <div className="w-1/2">
+                   <label className="text-[10px] text-gray-400 block mb-1">服務時間 (分鐘)</label>
+                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="90" />
+                </div>
               </div>
               <div className="space-y-2">
                  <label className="text-xs text-gray-400">風格分類</label>
