@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, Globe, Layout, MessageCircle, CalendarX, AlertOctagon, Sparkles, Scissors } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, Globe, Layout, MessageCircle, CalendarX, AlertOctagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -55,16 +55,8 @@ const getTodayString = () => {
 // --- 子組件：款式卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  
-  // 修改：拆分卸甲與保養的選擇狀態
-  const [localRemovalId, setLocalRemovalId] = useState('');
-  const [localCareId, setLocalCareId] = useState('');
-
+  const [localAddonId, setLocalAddonId] = useState('');
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
-
-  // 分類加購品：type === 'care' 為保養，其餘 (undefined or 'removal') 為卸甲
-  const removalOptions = addons.filter(a => a.type !== 'care');
-  const careOptions = addons.filter(a => a.type === 'care');
 
   const nextImg = (e) => {
     e.stopPropagation();
@@ -77,9 +69,8 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   };
 
   const handleBookingClick = () => {
-    const selectedRemoval = addons.find(a => a.id === localRemovalId) || null;
-    const selectedCare = addons.find(a => a.id === localCareId) || null;
-    onBook(item, selectedRemoval, selectedCare);
+    const selectedAddonObj = addons.find(a => a.id === localAddonId) || null;
+    onBook(item, selectedAddonObj);
   };
 
   return (
@@ -124,41 +115,25 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 uppercase tracking-widest font-light"><Clock size={14} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-6"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         
-        {/* 卸甲選單 (必選) */}
         <select 
-          className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-3 outline-none text-[#463E3E] transition-colors ${!localRemovalId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
-          onChange={(e) => setLocalRemovalId(e.target.value)}
-          value={localRemovalId}
+          className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-6 outline-none text-[#463E3E] transition-colors ${!localAddonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
+          onChange={(e) => setLocalAddonId(e.target.value)}
+          value={localAddonId}
         >
           <option value="">請選擇指甲現況 (必選)</option>
-          {removalOptions.map(a => (
+          {addons.map(a => (
             <option key={a.id} value={a.id}>
               {a.name} (+${a.price} / +{a.duration}分)
             </option>
           ))}
         </select>
 
-        {/* 保養選單 (必選) - 修改：增加必選邏輯與紅色警示框 */}
-        <select 
-          className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-6 outline-none text-[#463E3E] transition-colors ${!localCareId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
-          onChange={(e) => setLocalCareId(e.target.value)}
-          value={localCareId}
-        >
-          <option value="">請選擇保養項目 (必選)</option>
-          {careOptions.map(a => (
-            <option key={a.id} value={a.id}>
-              {a.name} (+${a.price} / +{a.duration}分)
-            </option>
-          ))}
-        </select>
-
-        {/* 修改：按鈕需同時判斷兩個選項 */}
         <button 
-          disabled={!localRemovalId || !localCareId} 
+          disabled={!localAddonId} 
           onClick={handleBookingClick} 
           className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
-          {!localRemovalId || !localCareId ? '請完成所有選項' : '點此預約'}
+          {!localAddonId ? '請先選擇現況' : '點此預約'}
         </button>
       </div>
     </div>
@@ -305,15 +280,13 @@ export default function App() {
   const [adminSelectedStore, setAdminSelectedStore] = useState('all');
 
   // 新增/管理用的輸入變數
-  // 修改：新增 type 欄位來區分 卸甲(removal) 與 保養(care)
-  const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '', type: 'removal' });
+  const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
   const [newCategoryInput, setNewCategoryInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
 
   const [bookingStep, setBookingStep] = useState('none');
   const [selectedItem, setSelectedItem] = useState(null);
-  // 修改：將單一 selectedAddon 改為物件儲存兩種加購
-  const [selectedAddons, setSelectedAddons] = useState({ removal: null, care: null });
+  const [selectedAddon, setSelectedAddon] = useState(null);
   
   // paymentMethod: '門市付款'
   const [bookingData, setBookingData] = useState({ name: '', phone: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
@@ -364,13 +337,7 @@ export default function App() {
     );
   }, [user]);
 
-  // 修改：計算總時長包含所有加購項目
-  const calcTotalDuration = () => {
-    const base = Number(selectedItem?.duration) || 90;
-    const removal = Number(selectedAddons.removal?.duration) || 0;
-    const care = Number(selectedAddons.care?.duration) || 0;
-    return base + removal + care;
-  };
+  const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
   const getStoreCleaningTime = (sId) => {
     const s = (shopSettings.stores || []).find(i => String(i.id) === String(sId));
@@ -467,39 +434,27 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), {
         ...addonForm,
-        type: addonForm.type || 'removal', // 預設為卸甲
         price: Number(addonForm.price),
         duration: Number(addonForm.duration || 0),
         createdAt: serverTimestamp()
       });
-      setAddonForm({ name: '', price: '', duration: '', type: 'removal' });
+      setAddonForm({ name: '', price: '', duration: '' });
       alert('加購項目已新增');
     } catch (err) { alert("新增失敗：" + err.message); }
   };
 
   const handleConfirmBooking = async () => {
     setIsSubmitting(true);
-    // 修改：計算總金額與名稱字串
-    const basePrice = Number(selectedItem?.price) || 0;
-    const removalPrice = Number(selectedAddons.removal?.price) || 0;
-    const carePrice = Number(selectedAddons.care?.price) || 0;
-    const finalAmount = basePrice + removalPrice + carePrice;
-    
-    const finalDuration = calcTotalDuration();
+    const finalAmount = (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
+    const finalDuration = (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
     const selectedStore = shopSettings.stores.find(s => s.id === bookingData.storeId);
-
-    // 建構詳細的加購項目名稱字串
-    let addonString = '';
-    if (selectedAddons.removal) addonString += `卸甲: ${selectedAddons.removal.name}`;
-    if (selectedAddons.care) addonString += (addonString ? ' / ' : '') + `保養: ${selectedAddons.care.name}`;
-    if (!addonString) addonString = '無';
 
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookingData,
         storeName: selectedStore ? selectedStore.name : '未指定',
         itemTitle: selectedItem?.title,
-        addonName: addonString,
+        addonName: selectedAddon?.name || '無',
         totalAmount: finalAmount,
         totalDuration: finalDuration,
         createdAt: serverTimestamp()
@@ -572,13 +527,7 @@ export default function App() {
     return matchStyle && matchPrice && matchTag;
   });
 
-  // 修改：計算總金額顯示
-  const calcTotalAmount = () => {
-    const base = Number(selectedItem?.price) || 0;
-    const removal = Number(selectedAddons.removal?.price) || 0;
-    const care = Number(selectedAddons.care?.price) || 0;
-    return base + removal + care;
-  };
+  const calcTotalAmount = () => (Number(selectedItem?.price) || 0) + (Number(selectedAddon?.price) || 0);
 
   const isNameInvalid = /\d/.test(bookingData.name);
   const isPhoneInvalid = bookingData.phone.length > 0 && bookingData.phone.length !== 10;
@@ -661,12 +610,8 @@ export default function App() {
                    </div>
                    <div className="flex-1 space-y-1">
                     <p className="text-xs text-[#C29591] tracking-widest uppercase font-bold">預約項目</p>
-                    <p className="text-sm font-medium">{selectedItem?.title}</p>
-                    <div className="text-xs text-gray-400 space-y-0.5">
-                       {selectedAddons.removal && <p>+ 卸甲: {selectedAddons.removal.name}</p>}
-                       {selectedAddons.care && <p>+ 保養: {selectedAddons.care.name}</p>}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">
+                    <p className="text-sm font-medium">{selectedItem?.title} {selectedAddon ? `+ ${selectedAddon.name}` : ''}</p>
+                    <p className="text-xs text-gray-400">
                         預計總時長: <span className="font-bold text-[#463E3E]">{calcTotalDuration()}</span> 分鐘
                     </p>
                    </div>
@@ -814,11 +759,7 @@ export default function App() {
                   </div>
                   <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
                     <span className="text-gray-400">加購項目</span>
-                    <div className="text-right">
-                        {selectedAddons.removal && <span className="block font-medium text-[#463E3E]">{selectedAddons.removal.name}</span>}
-                        {selectedAddons.care && <span className="block font-medium text-[#463E3E]">{selectedAddons.care.name}</span>}
-                        {!selectedAddons.removal && !selectedAddons.care && <span className="font-medium text-[#463E3E]">無</span>}
-                    </div>
+                    <span className="font-medium text-[#463E3E]">{selectedAddon ? selectedAddon.name : '無'}</span>
                   </div>
                   <div className="flex justify-between border-b border-dashed border-gray-100 pb-2">
                     <span className="text-gray-400">預計總時長</span>
@@ -1025,10 +966,10 @@ export default function App() {
                         <span>桃園區文中三路 67 號 1 樓</span>
                      </div>
                      <button 
-                        onClick={() => window.open('https://www.google.com/maps/search/?api=1&query=桃園區文中三路67號1樓', '_blank')}
-                        className="w-full border border-[#EAE7E2] py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white hover:border-[#463E3E] transition-all"
+                       onClick={() => window.open('https://www.google.com/maps/search/?api=1&query=桃園區文中三路67號1樓', '_blank')}
+                       className="w-full border border-[#EAE7E2] py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white hover:border-[#463E3E] transition-all"
                      >
-                        GOOGLE MAPS
+                       GOOGLE MAPS
                      </button>
                   </div>
                </div>
@@ -1084,9 +1025,9 @@ export default function App() {
                     setIsUploadModalOpen(true);
                   }}
                   onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
-                  onBook={(i, removal, care) => { 
+                  onBook={(i, addon) => { 
                     setSelectedItem(i); 
-                    setSelectedAddons({ removal, care }); 
+                    setSelectedAddon(addon); 
                     setBookingData(prev => ({
                         ...prev,
                         storeId: '',
@@ -1131,6 +1072,7 @@ export default function App() {
             <div className="flex border-b border-[#EAE7E2] px-8 bg-[#FAF9F6] sticky top-0 z-10 overflow-x-auto">
               {[
                 { id: 'stores', label: '門市設定', icon: <Store size={14}/> },
+                // 修改 1: 整合加購品頁面與分類 Hashtag
                 { id: 'attributes', label: '商品屬性與加購', icon: <Layers size={14}/> },
                 { id: 'staff_holiday', label: '人員與休假', icon: <Users size={14}/> },
                 { id: 'bookings', label: '預約管理', icon: <Calendar size={14}/> }
@@ -1285,31 +1227,23 @@ export default function App() {
                   <section className="space-y-6 lg:col-span-1">
                     <div className="border-l-4 border-[#C29591] pl-4">
                       <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品項</h4>
-                      <p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「保養」等額外服務</p>
+                      <p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「延甲」等額外服務</p>
                     </div>
                     <form onSubmit={handleAddAddon} className="bg-[#FAF9F6] p-4 border border-[#EAE7E2] space-y-3">
                       <div>
                         <input type="text" className="w-full border p-2 text-xs outline-none" placeholder="項目名稱 (如：卸甲)" value={addonForm.name} onChange={e => setAddonForm({...addonForm, name: e.target.value})} />
                       </div>
                       <div className="flex gap-2">
-                        <select className="w-1/3 border p-2 text-xs outline-none bg-white" value={addonForm.type} onChange={e => setAddonForm({...addonForm, type: e.target.value})}>
-                            <option value="removal">卸甲</option>
-                            <option value="care">保養</option>
-                        </select>
-                        <input type="number" className="w-1/3 border p-2 text-xs outline-none" placeholder="金額" value={addonForm.price} onChange={e => setAddonForm({...addonForm, price: e.target.value})} />
-                        <input type="number" className="w-1/3 border p-2 text-xs outline-none" placeholder="分鐘" value={addonForm.duration} onChange={e => setAddonForm({...addonForm, duration: e.target.value})} />
+                        <input type="number" className="w-1/2 border p-2 text-xs outline-none" placeholder="金額" value={addonForm.price} onChange={e => setAddonForm({...addonForm, price: e.target.value})} />
+                        <input type="number" className="w-1/2 border p-2 text-xs outline-none" placeholder="分鐘" value={addonForm.duration} onChange={e => setAddonForm({...addonForm, duration: e.target.value})} />
                       </div>
                       <button className="w-full bg-[#463E3E] text-white py-2 text-[10px] tracking-widest uppercase hover:bg-[#C29591] transition-colors">新增項目</button>
                     </form>
-                    
-                    {/* 卸甲列表 */}
-                    <div className="space-y-2 mt-4">
-                      <h5 className="text-xs font-bold text-[#463E3E] border-b pb-1">卸甲項目</h5>
-                      <div className="space-y-2">
-                      {addons.filter(a => a.type !== 'care').map(addon => (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {addons.map(addon => (
                         <div key={addon.id} className="border border-[#EAE7E2] p-3 flex justify-between items-center bg-white shadow-sm">
                           <div className="space-y-0.5">
-                            <div className="text-xs font-bold text-[#463E3E] flex items-center gap-1"><Sparkles size={10} className="text-gray-400"/> {addon.name}</div>
+                            <div className="text-xs font-bold text-[#463E3E]">{addon.name}</div>
                             <div className="text-[10px] text-gray-400">+${addon.price} / {addon.duration}分</div>
                           </div>
                           <button onClick={() => { if(confirm('確定刪除此加購項？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', addon.id)); }}>
@@ -1317,27 +1251,7 @@ export default function App() {
                           </button>
                         </div>
                       ))}
-                      </div>
                     </div>
-
-                    {/* 保養列表 */}
-                    <div className="space-y-2 mt-4">
-                      <h5 className="text-xs font-bold text-[#463E3E] border-b pb-1">保養項目</h5>
-                      <div className="space-y-2">
-                      {addons.filter(a => a.type === 'care').map(addon => (
-                        <div key={addon.id} className="border border-[#EAE7E2] p-3 flex justify-between items-center bg-white shadow-sm">
-                          <div className="space-y-0.5">
-                            <div className="text-xs font-bold text-[#463E3E] flex items-center gap-1"><Scissors size={10} className="text-gray-400"/> {addon.name}</div>
-                            <div className="text-[10px] text-gray-400">+${addon.price} / {addon.duration}分</div>
-                          </div>
-                          <button onClick={() => { if(confirm('確定刪除此加購項？')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'addons', addon.id)); }}>
-                            <Trash2 size={12} className="text-gray-300 hover:text-red-500 transition-colors"/>
-                          </button>
-                        </div>
-                      ))}
-                      </div>
-                    </div>
-
                   </section>
                 </div>
               )}
@@ -1494,7 +1408,7 @@ export default function App() {
                             <div className="font-bold">{b.name} <span className="font-normal text-gray-400 mx-1">|</span> {b.phone}</div>
                             <div className="text-gray-500 mt-1">
                               {b.itemTitle} 
-                              {b.addonName && <span className="text-[#C29591]"> + {b.addonName}</span>}
+                              {b.addonName && b.addonName !== '無' ? <span className="text-[#C29591]"> + {b.addonName}</span> : ''}
                             </div>
                             <div className="text-[10px] text-gray-400 mt-0.5">付款: {b.paymentMethod || '門市付款'}</div>
                           </div>
@@ -1556,16 +1470,19 @@ export default function App() {
             </div>
             <form onSubmit={handleItemSubmit} className="space-y-6">
               <input type="text" required className="w-full border-b py-2 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
+              
+              {/* 修改部分：將價格與服務時間並列顯示，並加上明確標題 */}
               <div className="flex gap-4">
                 <div className="w-1/2">
-                   <label className="text-[10px] text-gray-400 block mb-1">價格 (NT$)</label>
-                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="0" />
+                   <label className="text-xs text-gray-400 mb-1 block">價格 (NT$)</label>
+                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="輸入價格" />
                 </div>
                 <div className="w-1/2">
-                   <label className="text-[10px] text-gray-400 block mb-1">服務時間 (分鐘)</label>
-                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="90" />
+                   <label className="text-xs text-gray-400 mb-1 block">服務時間 (分鐘)</label>
+                   <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="預設 90" />
                 </div>
               </div>
+
               <div className="space-y-2">
                  <label className="text-xs text-gray-400">風格分類</label>
                  <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-b py-2 outline-none bg-white">
