@@ -138,13 +138,13 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
           ))}
         </select>
 
-        {/* 保養選單 (非必選) */}
+        {/* 保養選單 (必選) - 修改：增加必選邏輯與紅色警示框 */}
         <select 
-          className="w-full text-sm border border-[#EAE7E2] py-3 px-4 bg-white mb-6 outline-none text-[#463E3E] transition-colors" 
+          className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-6 outline-none text-[#463E3E] transition-colors ${!localCareId ? 'border-red-200' : 'border-[#EAE7E2]'}`} 
           onChange={(e) => setLocalCareId(e.target.value)}
           value={localCareId}
         >
-          <option value="">加購保養 (非必選)</option>
+          <option value="">請選擇保養項目 (必選)</option>
           {careOptions.map(a => (
             <option key={a.id} value={a.id}>
               {a.name} (+${a.price} / +{a.duration}分)
@@ -152,12 +152,13 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
           ))}
         </select>
 
+        {/* 修改：按鈕需同時判斷兩個選項 */}
         <button 
-          disabled={!localRemovalId} 
+          disabled={!localRemovalId || !localCareId} 
           onClick={handleBookingClick} 
           className="bg-[#463E3E] text-white px-8 py-3.5 rounded-full text-xs tracking-[0.2em] font-medium w-full hover:bg-[#C29591] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
-          {!localRemovalId ? '請先選擇現況' : '點此預約'}
+          {!localRemovalId || !localCareId ? '請完成所有選項' : '點此預約'}
         </button>
       </div>
     </div>
