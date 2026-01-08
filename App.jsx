@@ -11,7 +11,7 @@ import emailjs from '@emailjs/browser';
 // --- Firebase 配置 ---
 const firebaseConfig = {
   apiKey: "AIzaSyBkFqTUwtC7MqZ6h4--2_1BmldXEg-Haiw",
-  authDomain: "uniwawa-beauty.firebaseapp.com",
+  authDomain: "uniwawa-beauty.com", // 已更新為正確的網域名稱
   projectId: "uniwawa-beauty",
   storageBucket: "uniwawa-beauty.firebasestorage.app",
   appId: "1:1009617609234:web:3cb5466e79a81c1f1aaecb"
