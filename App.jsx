@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, Globe, Layout, MessageCircle, CalendarX, AlertOctagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -793,18 +793,73 @@ export default function App() {
         ) : activeTab === 'notice' ? (
           <div className="max-w-3xl mx-auto py-12 px-6 pb-24 h-full overflow-y-auto">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">RESERVATION POLICY / 預約須知</h2>
-            <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm">
-                <ul className="text-xs text-gray-500 space-y-4 leading-relaxed list-disc list-outside pl-4 whitespace-pre-wrap">
-                    <li>本店採 <span className="font-bold text-[#463E3E]">網站預約制</span>，請依系統開放的時段與服務項目進行預約</li>
-                    <li>服務款式以 <span className="font-bold text-[#463E3E]">網站上提供內容為主</span>，暫不提供帶圖或客製設計</li>
-                    <li>為了衛生與施作安全考量，<span className="text-red-400">恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務</span>，敬請理解</li>
-                    <li>若遲到 <span className="font-bold text-[#463E3E]">超過 10 分鐘</span>，將視當日狀況調整服務內容，遲到或其他相關問題請聯絡 LINE 官方客服</li>
-                    <li>LINE 官方帳號僅協助處理當日狀況，恕不作為預約或保留時段之管道</li>
-                    <li>如需取消或改期，請於 <span className="font-bold text-[#463E3E]">預約 24 小時前</span> 告知；未提前取消或未到者，將無法再接受後續預約，謝謝您的體諒</li>
-                    <li>施作後 7 日內非人為因素脫落，可協助免費補修，補修請提前預約</li>
-                </ul>
+            <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-6">
+                {/* 須知項目：Icon + 文字 */}
+                <div className="flex items-start gap-4">
+                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
+                        <Globe size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                        本店採 <span className="font-bold text-[#463E3E]">網站預約制</span>，請依系統開放的時段與服務項目進行預約
+                    </p>
+                </div>
+
+                <div className="flex items-start gap-4">
+                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
+                        <Layout size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                        服務款式以 <span className="font-bold text-[#463E3E]">網站上提供內容為主</span>，暫不提供帶圖或客製設計
+                    </p>
+                </div>
+
+                <div className="flex items-start gap-4">
+                    <div className="p-2 bg-red-50 rounded-full flex-shrink-0 text-red-400">
+                        <AlertTriangle size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                        為了衛生與施作安全考量，<span className="text-red-400">恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務</span>，敬請理解
+                    </p>
+                </div>
+
+                <div className="flex items-start gap-4">
+                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
+                        <Clock size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                        若遲到 <span className="font-bold text-[#463E3E]">超過 10 分鐘</span>，將視當日狀況調整服務內容，遲到或其他相關問題請聯絡 LINE 官方客服
+                    </p>
+                </div>
+
+                <div className="flex items-start gap-4">
+                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
+                        <MessageCircle size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                        LINE 官方帳號僅協助處理當日狀況，恕不作為預約或保留時段之管道
+                    </p>
+                </div>
+
+                <div className="flex items-start gap-4">
+                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
+                        <CalendarX size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                        如需取消或改期，請於 <span className="font-bold text-[#463E3E]">預約 24 小時前</span> 告知；未提前取消或未到者，將無法再接受後續預約，謝謝您的體諒
+                    </p>
+                </div>
+
+                <div className="flex items-start gap-4">
+                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
+                        <ShieldCheck size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                        施作後 7 日內非人為因素脫落，可協助免費補修，補修請提前預約
+                    </p>
+                </div>
+
                 <div className="mt-8 pt-6 border-t border-dashed border-gray-200 flex items-center justify-center gap-2 text-[10px] text-gray-400">
-                    <ShieldCheck size={14}/> 預約即代表您同意上述條款
+                    <AlertOctagon size={14}/> 預約即代表您同意上述條款
                 </div>
             </div>
           </div>
