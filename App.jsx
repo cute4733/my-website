@@ -30,8 +30,8 @@ const MAX_BOOKING_DAYS = 30;
 
 // --- 圖片直連 (解決圖片顯示問題) ---
 // 這裡使用了 Google Drive 的直接連結，不需上傳到 public 資料夾
-const IMG_WAWA = "https://lh3.googleusercontent.com/d/19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78";
-const IMG_STORE = "https://lh3.googleusercontent.com/d/1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX";
+const IMG_WAWA = "https://drive.google.com/thumbnail?id=19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78&sz=w1000";
+const IMG_STORE = "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000";
 
 // 須知內容結構化
 const NOTICE_ITEMS = [
@@ -708,8 +708,25 @@ export default function App() {
             
             {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2] flex-shrink-0">
-                <button onClick={() => {setEditingItem(null); setFormData({title:'', price:'', category: shopSettings.styleCategories[0] || '極簡氣質', duration:'90', images:[], tags: ''}); setIsUploadModalOpen(true)}} className="text-[#C29591]"><Plus size={18}/></button>
-                <button onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591]"><Settings size={18}/></button>
+                {/* 增加 z-index，防止按鈕被遮擋，並加入安全檢查避免 Crash */}
+                <button 
+                  onClick={() => {
+                      setEditingItem(null); 
+                      setFormData({
+                          title:'', 
+                          price:'', 
+                          category: (shopSettings.styleCategories && shopSettings.styleCategories.length > 0) ? shopSettings.styleCategories[0] : '極簡氣質', 
+                          duration:'90', 
+                          images:[], 
+                          tags: ''
+                      }); 
+                      setIsUploadModalOpen(true)
+                  }} 
+                  className="text-[#C29591] relative z-50 hover:scale-110 transition-transform"
+                >
+                    <Plus size={18}/>
+                </button>
+                <button onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591] relative z-50 hover:scale-110 transition-transform"><Settings size={18}/></button>
               </div>
             ) : (
               <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 hover:text-[#C29591] transition-colors flex-shrink-0"><Lock size={14}/></button>
