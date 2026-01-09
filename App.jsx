@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -28,7 +28,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; 
 const MAX_BOOKING_DAYS = 30; 
 
-// 將須知拆分為結構化資料以便排版
+// 須知內容結構化
 const NOTICE_ITEMS = [
   { title: "網站預約制", content: "本店採全預約制，請依系統開放的時段與服務項目進行預約，恕不接受臨時客。" },
   { title: "款式說明", content: "服務款式以網站上提供內容為主，暫不提供帶圖或客製設計服務。" },
@@ -67,15 +67,25 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-// --- 子組件：款式卡片 ---
+// --- 子組件：款式卡片 (包含效能優化與預載) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [localAddonId, setLocalAddonId] = useState('');
+  
+  // 取得圖片陣列，若無則顯示預設圖
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
-  // 滑動 State
-  const [touchStart, setTouchStart] = useState(null);
-  const [touchEnd, setTouchEnd] = useState(null);
+  // --- 圖片預載邏輯 (Preload Logic) ---
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const nextIndex = (currentIdx + 1) % images.length;
+    const img = new Image();
+    img.src = images[nextIndex];
+  }, [currentIdx, images]);
+
+  // --- 滑動手勢相關 Ref (不觸發 Re-render) ---
+  const touchStartRef = useRef(null);
+  const touchEndRef = useRef(null);
   const minSwipeDistance = 50; 
 
   const nextImg = (e) => {
@@ -89,22 +99,22 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   };
 
   const onTouchStart = (e) => {
-    setTouchEnd(null); 
-    setTouchStart(e.targetTouches[0].clientX);
+    touchEndRef.current = null; 
+    touchStartRef.current = e.targetTouches[0].clientX;
   };
 
   const onTouchMove = (e) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    touchEndRef.current = e.targetTouches[0].clientX;
   };
 
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
+    if (!touchStartRef.current || !touchEndRef.current) return;
+    const distance = touchStartRef.current - touchEndRef.current;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
 
-    if (isLeftSwipe) nextImg(null);
-    if (isRightSwipe) prevImg(null);
+    if (isLeftSwipe) nextImg(null); 
+    if (isRightSwipe) prevImg(null); 
   };
 
   const handleBookingClick = () => {
@@ -121,23 +131,43 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         </div>
       )}
       
+      {/* 圖片顯示區域 */}
       <div 
         className="aspect-[3/4] overflow-hidden relative bg-gray-50"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <img src={images[currentIdx]} className="w-full h-full object-cover transition-opacity duration-300" alt={item.title} />
+        <img 
+            src={images[currentIdx]} 
+            className="w-full h-full object-cover transition-opacity duration-300" 
+            alt={item.title} 
+            decoding="async" 
+            loading="lazy"   
+        />
+        
+        {/* 多圖時顯示左右箭頭與圓點指示器 (手機版也顯示) */}
         {images.length > 1 && (
           <>
-            <button onClick={prevImg} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 hidden md:block"><ChevronLeft size={20} /></button>
-            <button onClick={nextImg} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 hidden md:block"><ChevronRight size={20} /></button>
+            <button 
+              onClick={prevImg} 
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 shadow-sm backdrop-blur-sm"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button 
+              onClick={nextImg} 
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 shadow-sm backdrop-blur-sm"
+            >
+              <ChevronRight size={20} />
+            </button>
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {images.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} />))}
             </div>
           </>
         )}
       </div>
+      
       <div className="p-6 flex flex-col items-center text-center">
         <span className="text-xs text-[#C29591] tracking-[0.3em] uppercase mb-2 font-medium">{item.category}</span>
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
@@ -1046,7 +1076,7 @@ export default function App() {
                   (預約請直接使用網站功能)
                 </p>
                 <a 
-                  href="https://lin.ee/mjdcvBM" 
+                  href="https://lin.ee/X91bkZ6" 
                   target="_blank" 
                   rel="noreferrer" 
                   className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold hover:opacity-90 transition-opacity tracking-widest text-sm"
