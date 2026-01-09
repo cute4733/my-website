@@ -984,8 +984,8 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'search' ? ( 
-          <div className="max-w-2xl mx-auto px-6 py-12">
-              {/* 修正：將原本的 max-w-lg 改為 max-w-2xl，與預約表單一致 */}
+          <div className="max-w-3xl mx-auto px-6 py-12">
+              {/* 修正：將寬度調整為 max-w-3xl，與「須知」頁面一致 */}
               <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase text-center mb-12">預約查詢</h2>
 
               <form onSubmit={handleSearchBooking} autoComplete="off" className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
@@ -1093,8 +1093,8 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'contact' ? (
-          <div className="max-w-2xl mx-auto px-6 py-12">
-             {/* 修正：將原本的 max-w-xl 改為 max-w-2xl，使區塊更寬闊大器 */}
+          <div className="max-w-3xl mx-auto px-6 py-12">
+             {/* 修正：將寬度調整為 max-w-3xl，與「須知」頁面一致 */}
              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-12">聯絡我們</h2>
              <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
                 <p className="text-sm text-gray-500 mb-6 leading-relaxed">
