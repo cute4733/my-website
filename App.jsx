@@ -28,8 +28,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; 
 const MAX_BOOKING_DAYS = 30; 
 
-// --- 圖片直連 (解決圖片顯示問題) ---
-// 這裡使用了 Google Drive 的直接連結，不需上傳到 public 資料夾
+// --- 圖片直連 ---
 const IMG_WAWA = "https://drive.google.com/thumbnail?id=19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78&sz=w1000";
 const IMG_STORE = "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000";
 
@@ -214,7 +213,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   );
 };
 
-// --- Calendar 組件 ---
+// ... Calendar 組件保持不變 ...
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId, isDayFull }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
@@ -405,6 +404,31 @@ export default function App() {
       setAllBookings(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
   }, [user]);
+
+  // 安全開啟新增/編輯視窗的函式
+  const handleOpenUpload = (itemToEdit = null) => {
+    setEditingItem(itemToEdit);
+    
+    // 確保有預設分類，防止 undefined
+    const defaultCategory = (shopSettings.styleCategories && shopSettings.styleCategories.length > 0) 
+                            ? shopSettings.styleCategories[0] 
+                            : '極簡氣質';
+
+    if (itemToEdit) {
+        const tagsStr = itemToEdit.tags ? itemToEdit.tags.join(', ') : '';
+        setFormData({ ...itemToEdit, tags: tagsStr });
+    } else {
+        setFormData({
+            title:'', 
+            price:'', 
+            category: defaultCategory, 
+            duration:'90', 
+            images:[], 
+            tags: ''
+        });
+    }
+    setIsUploadModalOpen(true);
+  };
 
   const calcTotalDuration = () => (Number(selectedItem?.duration) || 90) + (Number(selectedAddon?.duration) || 0);
 
@@ -690,15 +714,15 @@ export default function App() {
           ::-webkit-scrollbar-track { background: transparent; }
           ::-webkit-scrollbar-thumb { background: #C29591; border-radius: 3px; }
           ::-webkit-scrollbar-thumb:hover { background: #463E3E; }
-          html { overflow-y: scroll; } /* 強制顯示捲軸軌道，防止跳動 */
+          html { overflow-y: scroll; }
         `}
       </style>
 
-      <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
+      {/* Navbar Z-Index boosted to 500 */}
+      <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-[500] border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('catalog'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0 justify-center">
-            {/* 3. 調整順序：關於(原首頁) -> 款式 -> 須知 -> 門市 -> 查詢 -> 聯絡 */}
             <button onClick={() => {setActiveTab('about'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'about' ? 'text-[#C29591]' : ''}`}>關於</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
@@ -708,33 +732,18 @@ export default function App() {
             
             {isLoggedIn ? (
               <div className="flex gap-4 border-l pl-4 border-[#EAE7E2] flex-shrink-0">
-                {/* 增加 z-index，防止按鈕被遮擋，並加入安全檢查避免 Crash */}
-                <button 
-                  onClick={() => {
-                      setEditingItem(null); 
-                      setFormData({
-                          title:'', 
-                          price:'', 
-                          category: (shopSettings.styleCategories && shopSettings.styleCategories.length > 0) ? shopSettings.styleCategories[0] : '極簡氣質', 
-                          duration:'90', 
-                          images:[], 
-                          tags: ''
-                      }); 
-                      setIsUploadModalOpen(true)
-                  }} 
-                  className="text-[#C29591] relative z-50 hover:scale-110 transition-transform"
-                >
-                    <Plus size={18}/>
-                </button>
-                <button onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591] relative z-50 hover:scale-110 transition-transform"><Settings size={18}/></button>
+                {/* 使用封裝好的 handleOpenUpload，並指定 type="button" 確保行為正確 */}
+                <button type="button" onClick={() => handleOpenUpload()} className="text-[#C29591] hover:scale-110 transition-transform"><Plus size={18}/></button>
+                <button type="button" onClick={() => setIsBookingManagerOpen(true)} className="text-[#C29591] hover:scale-110 transition-transform"><Settings size={18}/></button>
               </div>
             ) : (
-              <button onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 hover:text-[#C29591] transition-colors flex-shrink-0"><Lock size={14}/></button>
+              <button type="button" onClick={() => setIsAdminModalOpen(true)} className="text-gray-300 hover:text-[#C29591] transition-colors flex-shrink-0"><Lock size={14}/></button>
             )}
           </div>
         </div>
       </nav>
 
+      {/* Main content pt increased to avoid overlap */}
       <main className="pt-32 md:pt-28 pb-12">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6">
@@ -1181,10 +1190,7 @@ export default function App() {
               {filteredItems.map(item => (
                 <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
                   onEdit={(i) => {
-                    setEditingItem(i); 
-                    const tagsStr = i.tags ? i.tags.join(', ') : '';
-                    setFormData({...i, tags: tagsStr}); 
-                    setIsUploadModalOpen(true);
+                     handleOpenUpload(i); // Reuse the new handler
                   }}
                   onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
                   onBook={(i, addon) => { 
@@ -1221,9 +1227,9 @@ export default function App() {
         </div>
       )}
 
-      {/* 管理彈窗 */}
+      {/* 管理彈窗 - Z-index boosted */}
       {isBookingManagerOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:w-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="bg-white px-8 py-6 border-b flex justify-between items-center">
               <h3 className="text-xs tracking-[0.3em] font-bold uppercase text-[#463E3E]">系統管理中心</h3>
@@ -1608,6 +1614,115 @@ export default function App() {
                 </section>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 款式上傳彈窗 - Z-index Boosted */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 bg-black/40 z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+              <h3 className="tracking-widest font-light">{editingItem ? '修改款式' : '上傳新款'}</h3>
+              <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
+            </div>
+            <form onSubmit={handleItemSubmit} className="space-y-6">
+                <input type="text" required className="w-full border-b py-2 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
+                
+                <div className="flex gap-4">
+                  <div className="w-1/2">
+                      <label className="text-xs text-gray-400 mb-1 block">價格 (NT$)</label>
+                      <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="輸入價格" />
+                  </div>
+                  <div className="w-1/2">
+                      <label className="text-xs text-gray-400 mb-1 block">服務時間 (分鐘)</label>
+                      <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="預設 90" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                   <label className="text-xs text-gray-400">風格分類</label>
+                   <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-b py-2 outline-none bg-white">
+                     {shopSettings.styleCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                   </select>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs text-gray-400 flex items-center gap-1"><Hash size={10} /> 標籤 (Tags)</label>
+                    <input 
+                      type="text" 
+                      className="w-full border-b py-2 outline-none placeholder-gray-300 text-xs" 
+                      value={formData.tags} 
+                      onChange={e => setFormData({...formData, tags: e.target.value})} 
+                      placeholder="例如：顯白, 夏天 (請用逗號分隔)" 
+                    />
+                    {shopSettings.savedTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {shopSettings.savedTags.map(tag => (
+                                <button 
+                                  type="button"
+                                  key={tag}
+                                  onClick={() => {
+                                      const currentTags = formData.tags ? formData.tags.split(',').map(t => t.trim()) : [];
+                                      if(!currentTags.includes(tag)) {
+                                          const newTags = [...currentTags, tag].filter(t => t).join(', ');
+                                          setFormData({...formData, tags: newTags});
+                                      }
+                                  }}
+                                  className="text-[9px] bg-gray-100 text-gray-500 px-2 py-1 rounded-full hover:bg-[#C29591] hover:text-white transition-colors"
+                                >
+                                  #{tag}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {formData.images.map((img, i) => (
+                    <div key={i} className="relative w-20 h-20 border">
+                      <img src={img} className="w-full h-full object-cover" alt="preview" />
+                      <button type="button" onClick={() => {
+                          setFormData(prev => ({
+                              ...prev, 
+                              images: prev.images.filter((_, idx) => idx !== i)
+                          }));
+                      }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
+                    </div>
+                  ))}
+                  
+                  <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-[#C29591] text-gray-400 hover:text-[#C29591] transition-colors">
+                    <Upload size={16} />
+                    <input type="file" hidden accept="image/*" multiple onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                          const files = Array.from(e.target.files);
+                          
+                          const validFiles = files.filter(f => {
+                              if (f.size > 1 * 1024 * 1024) {
+                                  alert(`檔案 ${f.name} 超過 1MB，已自動略過`);
+                                  return false;
+                              }
+                              return true;
+                          });
+
+                          const currentTotalSize = rawFiles.reduce((acc, f) => acc + f.size, 0);
+                          const newFilesTotalSize = validFiles.reduce((acc, f) => acc + f.size, 0);
+                          
+                          if (currentTotalSize + newFilesTotalSize > 5 * 1024 * 1024) { 
+                              alert("商品圖片總大小超過 5MB 上限，無法新增更多圖片");
+                              return;
+                          }
+
+                          setRawFiles(prev => [...prev, ...validFiles]);
+
+                          const previewUrls = validFiles.map(f => URL.createObjectURL(f));
+                          setFormData(prev => ({...prev, images: [...prev.images, ...previewUrls]}));
+                      }
+                    }} />
+                  </label>
+                </div>
+                <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase hover:bg-[#C29591] transition-colors">{isUploading ? '處理中...' : '確認發布'}</button>
+            </form>
           </div>
         </div>
       )}
