@@ -67,15 +67,13 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-// --- 子組件：款式卡片 (包含效能優化與預載) ---
+// --- 子組件：款式卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [localAddonId, setLocalAddonId] = useState('');
-  
-  // 取得圖片陣列，若無則顯示預設圖
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
-  // --- 圖片預載邏輯 (Preload Logic) ---
+  // 圖片預載
   useEffect(() => {
     if (images.length <= 1) return;
     const nextIndex = (currentIdx + 1) % images.length;
@@ -83,7 +81,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
     img.src = images[nextIndex];
   }, [currentIdx, images]);
 
-  // --- 滑動手勢相關 Ref (不觸發 Re-render) ---
   const touchStartRef = useRef(null);
   const touchEndRef = useRef(null);
   const minSwipeDistance = 50; 
@@ -131,9 +128,9 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         </div>
       )}
       
-      {/* 圖片顯示區域 */}
+      {/* 4. 修改：加入 touch-pan-x 防止垂直捲動 */}
       <div 
-        className="aspect-[3/4] overflow-hidden relative bg-gray-50"
+        className="aspect-[3/4] overflow-hidden relative bg-gray-50 touch-pan-x"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -146,23 +143,23 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
             loading="lazy"   
         />
         
-        {/* 多圖時顯示左右箭頭與圓點指示器 (手機版也顯示) */}
         {images.length > 1 && (
           <>
+            {/* 1. 修改：手機版箭頭樣式，改用 darker background 確保可見度 */}
             <button 
               onClick={prevImg} 
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 shadow-sm backdrop-blur-sm"
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/30 hover:bg-black/50 text-white rounded-full z-10 backdrop-blur-sm transition-colors"
             >
               <ChevronLeft size={20} />
             </button>
             <button 
               onClick={nextImg} 
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 shadow-sm backdrop-blur-sm"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/30 hover:bg-black/50 text-white rounded-full z-10 backdrop-blur-sm transition-colors"
             >
               <ChevronRight size={20} />
             </button>
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-              {images.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} />))}
+              {images.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} />))}
             </div>
           </>
         )}
@@ -214,7 +211,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   );
 };
 
-// --- 子組件：前台預約月曆 ---
+// ... (Calendar 元件保持不變，為節省篇幅略過，請保留原本的 CustomCalendar 與 AdminBookingCalendar 程式碼) ...
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId, isDayFull }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
@@ -284,7 +281,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
   );
 };
 
-// --- 子組件：後台管理月曆 ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const currentMonth = viewDate.getMonth();
@@ -717,7 +713,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* 修改：將 pt-24 增加至 pt-32，避免標題被遮擋 */}
       <main className="pt-32 md:pt-28 pb-12">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6">
@@ -1100,22 +1095,28 @@ export default function App() {
         ) : (
           <div className="max-w-7xl mx-auto px-6 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
-                <div className="flex flex-wrap gap-4 justify-center items-center">
-                   <span className="text-[10px] text-gray-300 tracking-widest mr-2">STYLE</span>
-                   {activeCategories.map(c => (
-                     <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{c}</button>
-                   ))}
+                {/* 2 & 3 修改：使用 items-start 靠左對齊，STYLE 允許換行 */}
+                <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start md:items-center">
+                   <span className="text-[10px] text-gray-300 tracking-widest mr-2 whitespace-nowrap">STYLE</span>
+                   <div className="flex flex-wrap gap-2 md:gap-4">
+                     {activeCategories.map(c => (
+                       <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 whitespace-nowrap ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{c}</button>
+                     ))}
+                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-4 justify-center items-center">
-                   <span className="text-[10px] text-gray-300 tracking-widest mr-2">PRICE</span>
-                   {PRICE_CATEGORIES.map(p => (
-                     <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{p}</button>
-                   ))}
+                {/* 2 & 3 修改：使用 items-start 靠左對齊，PRICE 強制一行不換行 (flex-nowrap + overflow-x-auto) */}
+                <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start md:items-center">
+                   <span className="text-[10px] text-gray-300 tracking-widest mr-2 whitespace-nowrap">PRICE</span>
+                   <div className="flex flex-nowrap overflow-x-auto no-scrollbar gap-2 md:gap-4 w-full md:w-auto">
+                     {PRICE_CATEGORIES.map(p => (
+                       <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 whitespace-nowrap flex-shrink-0 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{p}</button>
+                     ))}
+                   </div>
                 </div>
 
                 {tagFilter && (
-                  <div className="flex justify-center items-center">
+                  <div className="flex justify-start md:justify-center items-center">
                     <button 
                       onClick={() => setTagFilter('')}
                       className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs tracking-wide hover:bg-[#463E3E] transition-colors"
