@@ -28,16 +28,18 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; 
 const MAX_BOOKING_DAYS = 30; 
 
-// 預約須知內容
-const NOTICE_CONTENT = `
-【預約須知】
-1. 本店採網站預約制，請依系統開放的時段與服務項目進行預約。
-2. 服務款式以網站上提供內容為主，暫不提供帶圖或客製設計。
-3. 為了衛生與施作安全考量，恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務。
-4. 若遲到超過 10 分鐘，將視當日狀況調整服務內容。
-5. 如需取消或改期，請於預約 24 小時前告知。
-6. 施作後 7 日內非人為因素脫落，可協助免費補修。
-`;
+// 將須知拆分為結構化資料以便排版
+const NOTICE_ITEMS = [
+  { title: "網站預約制", content: "本店採全預約制，請依系統開放的時段與服務項目進行預約，恕不接受臨時客。" },
+  { title: "款式說明", content: "服務款式以網站上提供內容為主，暫不提供帶圖或客製設計服務。" },
+  { title: "病甲服務說明", content: "為了衛生與施作安全考量，恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務。" },
+  { title: "遲到規範", content: "若遲到超過 10 分鐘，將視當日狀況調整服務內容；若影響後續預約可能無法施作。" },
+  { title: "取消與改期", content: "如需取消或改期，請於預約 24 小時前告知。未提前取消或無故未到者，將無法再接受後續預約。" },
+  { title: "保固服務", content: "施作後 7 日內若非人為因素脫落，可協助免費補修，請聯絡官方 LINE 預約補修時間。" },
+];
+
+// 用於 Email 的純文字須知
+const NOTICE_CONTENT_TEXT = NOTICE_ITEMS.map((item, index) => `${index + 1}. ${item.title}: ${item.content}`).join('\n');
 
 const generateTimeSlots = () => {
   const slots = [];
@@ -510,7 +512,7 @@ export default function App() {
         addon_name: selectedAddon?.name || '無',
         total_amount: finalAmount,
         total_duration: finalDuration,
-        notice_content: NOTICE_CONTENT
+        notice_content: NOTICE_CONTENT_TEXT
       };
 
       await emailjs.send('service_uniwawa', 'template_d5tq1z9', templateParams, 'ehbGdRtZaXWft7qLM');
@@ -651,8 +653,9 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  // 1. 移除了 h-screen 和 overflow-y-scroll，改用 min-h-screen 讓網頁自然捲動
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans overflow-y-scroll">
+    <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <style>
         {`
           ::-webkit-scrollbar { width: 6px; }
@@ -685,9 +688,9 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="pt-24 md:pt-20 h-screen overflow-hidden">
+      <main className="pt-24 md:pt-28 pb-12">
         {bookingStep === 'form' ? (
-          <div className="max-w-2xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+          <div className="max-w-2xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">RESERVATION / 預約資訊</h2>
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -808,7 +811,7 @@ export default function App() {
             </div>
           </div>
         ) : bookingStep === 'success' ? (
-          <div className="max-w-lg mx-auto py-8 md:py-12 px-6 h-full overflow-y-auto">
+          <div className="max-w-lg mx-auto px-6">
             <div className="text-center mb-10">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#FAF9F6] mb-4">
                 <CheckCircle size={32} className="text-[#C29591]" />
@@ -891,59 +894,42 @@ export default function App() {
             </button>
           </div>
         ) : activeTab === 'notice' ? (
-          <div className="max-w-3xl mx-auto py-8 md:py-12 px-6 pb-24 h-full overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">預約須知</h2>
-            <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-6">
+            
+            {/* 2. 美化須知內容 - 雜誌風格排版 */}
+            <div className="bg-white border border-[#EAE7E2] p-8 md:p-12 shadow-sm relative">
+                <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
                 
-                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                        本店採 <span className="font-bold text-[#463E3E]">網站預約制</span>，請依系統開放的時段與服務項目進行預約
-                    </p>
+                <div className="space-y-8">
+                  {NOTICE_ITEMS.map((item, index) => (
+                    <div key={index} className="group flex flex-col md:flex-row gap-2 md:gap-6 border-b border-dashed border-gray-100 pb-8 last:border-0 last:pb-0">
+                       <div className="flex-shrink-0">
+                          <span className="text-2xl md:text-3xl font-serif italic text-[#C29591]/80 font-light">
+                             {String(index + 1).padStart(2, '0')}
+                          </span>
+                       </div>
+                       <div>
+                          <h3 className="text-sm font-bold text-[#463E3E] tracking-widest mb-2 group-hover:text-[#C29591] transition-colors">
+                            {item.title}
+                          </h3>
+                          <p className="text-xs text-gray-500 leading-7 text-justify">
+                            {item.content}
+                          </p>
+                       </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                        服務款式以 <span className="font-bold text-[#463E3E]">網站上提供內容為主</span>，暫不提供帶圖或客製設計
+                <div className="mt-12 pt-8 border-t border-[#EAE7E2] text-center">
+                    <p className="text-[10px] text-gray-400 tracking-widest uppercase flex items-center justify-center gap-2">
+                      <AlertOctagon size={14}/> 預約即代表同意以上條款
                     </p>
-                </div>
-
-                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                        為了衛生與施作安全考量，<span className="text-red-400">恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務</span>，敬請理解
-                    </p>
-                </div>
-
-                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                        若遲到 <span className="font-bold text-[#463E3E]">超過 10 分鐘</span>，將視當日狀況調整服務內容，遲到或其他相關問題請聯絡 LINE 官方客服
-                    </p>
-                </div>
-
-                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                        LINE 官方帳號僅協助處理當日狀況，恕不作為預約或保留時段之管道
-                    </p>
-                </div>
-
-                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                        如需取消或改期，請於 <span className="font-bold text-[#463E3E]">預約 24 小時前</span> 告知；未提前取消或未到者，將無法再接受後續預約，謝謝您的體諒
-                    </p>
-                </div>
-
-                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                        施作後 7 日內非人為因素脫落，可協助免費補修，補修請提前預約
-                    </p>
-                </div>
-
-                <div className="mt-8 pt-6 border-t border-dashed border-gray-200 flex items-center justify-center gap-2 text-[10px] text-gray-400">
-                    <AlertOctagon size={14}/> 預約即代表您同意上述條款
                 </div>
             </div>
           </div>
         ) : activeTab === 'search' ? ( 
-          <div className="max-w-3xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-6">
               <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase text-center mb-8 md:mb-12">預約查詢</h2>
 
               <form onSubmit={handleSearchBooking} autoComplete="off" className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
@@ -1025,7 +1011,7 @@ export default function App() {
               </div>
           </div>
         ) : activeTab === 'store' ? (
-          <div className="max-w-4xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">門市資訊</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
@@ -1051,7 +1037,7 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'contact' ? (
-          <div className="max-w-3xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-6">
              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">聯絡我們</h2>
              <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
                 <p className="text-xs text-gray-500 mb-6 leading-relaxed">
@@ -1070,7 +1056,7 @@ export default function App() {
              </div>
           </div>
         ) : activeTab === 'home' ? (
-          <div className="max-w-xl mx-auto px-6 py-8 md:py-12 text-center h-full overflow-y-auto">
+          <div className="max-w-xl mx-auto px-6 text-center">
             <div className="mb-10">
               <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm uppercase font-extralight">EST. 2026 • TAOYUAN</span>
             </div>
@@ -1081,7 +1067,7 @@ export default function App() {
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
-          <div className="max-w-7xl mx-auto px-6 py-8 md:py-12 space-y-8 h-full overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-6 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
                 <div className="flex flex-wrap gap-4 justify-center items-center">
                    <span className="text-[10px] text-gray-300 tracking-widest mr-2">STYLE</span>
