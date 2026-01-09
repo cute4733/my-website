@@ -71,19 +71,11 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-// --- 子組件：款式卡片 ---
+// --- 子組件：款式卡片 (優化版) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [localAddonId, setLocalAddonId] = useState('');
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
-
-  // 圖片預載
-  useEffect(() => {
-    if (images.length <= 1) return;
-    const nextIndex = (currentIdx + 1) % images.length;
-    const img = new Image();
-    img.src = images[nextIndex];
-  }, [currentIdx, images]);
 
   const touchStartRef = useRef(null);
   const touchEndRef = useRef(null);
@@ -132,19 +124,31 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         </div>
       )}
       
+      {/* 圖片區域：修改為 Carousel 模式以支援滑動動畫與快取 */}
       <div 
         className="aspect-[3/4] overflow-hidden relative bg-gray-50"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <img 
-            src={images[currentIdx]} 
-            className="w-full h-full object-cover transition-opacity duration-300" 
-            alt={item.title} 
-            decoding="async" 
-            loading="lazy"   
-        />
+        {/* 滑動軌道 */}
+        <div 
+            className="flex w-full h-full transition-transform duration-500 ease-in-out will-change-transform"
+            style={{ transform: `translateX(-${currentIdx * 100}%)` }}
+        >
+            {images.map((imgSrc, idx) => (
+                <div key={idx} className="w-full h-full flex-shrink-0">
+                    <img 
+                        src={imgSrc} 
+                        className="w-full h-full object-cover" 
+                        alt={`${item.title}-${idx}`}
+                        // 第一張圖片立即載入，其餘懶加載，平衡效能與體驗
+                        loading={idx === 0 ? "eager" : "lazy"}
+                        decoding="async"
+                    />
+                </div>
+            ))}
+        </div>
         
         {images.length > 1 && (
           <>
@@ -161,7 +165,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
               <ChevronRight size={20} />
             </button>
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-              {images.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} />))}
+              {images.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors duration-300 ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} />))}
             </div>
           </>
         )}
@@ -715,6 +719,9 @@ export default function App() {
           ::-webkit-scrollbar-thumb { background: #C29591; border-radius: 3px; }
           ::-webkit-scrollbar-thumb:hover { background: #463E3E; }
           html { overflow-y: scroll; }
+          /* 用於隱藏水平捲動條但保留功能 */
+          .hide-scrollbar::-webkit-scrollbar { display: none; }
+          .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         `}
       </style>
 
@@ -959,19 +966,19 @@ export default function App() {
                 <div className="space-y-5">
                   {NOTICE_ITEMS.map((item, index) => (
                     <div key={index} className="group flex flex-col md:flex-row gap-2 md:gap-6 border-b border-dashed border-gray-100 pb-5 last:border-0 last:pb-0">
-                       <div className="flex-shrink-0">
+                        <div className="flex-shrink-0">
                           <span className="text-2xl md:text-3xl font-serif italic text-[#C29591]/80 font-light">
                              {String(index + 1).padStart(2, '0')}
                           </span>
-                       </div>
-                       <div>
+                        </div>
+                        <div>
                           <h3 className="text-sm font-bold text-[#463E3E] tracking-widest mb-2 group-hover:text-[#C29591] transition-colors">
                             {item.title}
                           </h3>
                           <p className="text-xs text-gray-500 leading-7 text-justify">
                             {item.content}
                           </p>
-                       </div>
+                        </div>
                     </div>
                   ))}
                 </div>
@@ -1098,7 +1105,7 @@ export default function App() {
                 <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
                 <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
                     <div className="w-full md:w-5/12 aspect-[4/5] bg-gray-100 overflow-hidden relative border border-[#EAE7E2]">
-                         <img src={IMG_WAWA} className="w-full h-full object-cover" alt="Wawa" />
+                          <img src={IMG_WAWA} className="w-full h-full object-cover" alt="Wawa" />
                     </div>
                     <div className="flex-1 space-y-6 text-xs text-gray-500 leading-8 text-justify">
                         <p>
@@ -1190,7 +1197,7 @@ export default function App() {
               {filteredItems.map(item => (
                 <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
                   onEdit={(i) => {
-                     handleOpenUpload(i); // Reuse the new handler
+                      handleOpenUpload(i); // Reuse the new handler
                   }}
                   onDelete={(id) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))}
                   onBook={(i, addon) => { 
@@ -1235,8 +1242,9 @@ export default function App() {
               <h3 className="text-xs tracking-[0.3em] font-bold uppercase text-[#463E3E]">系統管理中心</h3>
               <button onClick={() => setIsBookingManagerOpen(false)}><X size={24}/></button>
             </div>
-
-            <div className="flex border-b border-[#EAE7E2] px-8 bg-[#FAF9F6] sticky top-0 z-10 overflow-x-auto">
+            
+            {/* 修改：加入 overflow-y-hidden 與 whitespace-nowrap 與 hide-scrollbar 解決手機上下滑動問題 */}
+            <div className="flex border-b border-[#EAE7E2] px-8 bg-[#FAF9F6] sticky top-0 z-10 overflow-x-auto overflow-y-hidden whitespace-nowrap hide-scrollbar overscroll-contain">
               {[
                 { id: 'stores', label: '門市設定', icon: <Store size={14}/> },
                 { id: 'attributes', label: '商品屬性與加購', icon: <Layers size={14}/> },
