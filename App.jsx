@@ -984,8 +984,8 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'search' ? ( 
-          <div className="max-w-lg mx-auto px-6 py-12">
-              {/* 修正：移除多餘的 div，直接與其他頁面保持一致 */}
+          <div className="max-w-2xl mx-auto px-6 py-12">
+              {/* 修正：將原本的 max-w-lg 改為 max-w-2xl，與預約表單一致 */}
               <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase text-center mb-12">預約查詢</h2>
 
               <form onSubmit={handleSearchBooking} autoComplete="off" className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
@@ -1068,34 +1068,33 @@ export default function App() {
           </div>
         ) : activeTab === 'store' ? (
           <div className="max-w-4xl mx-auto px-6 py-12">
-            {/* 修正：嚴格與其他頁面 H2 樣式與間距一致 */}
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">門市資訊</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
                   <div className="aspect-video bg-gray-100 overflow-hidden relative">
-                     <img src="https://images.unsplash.com/photo-1522337660859-02fbefca4702?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
-                     <div className="absolute inset-0 bg-[#463E3E]/10 group-hover:bg-transparent transition-colors"></div>
+                      <img src="https://images.unsplash.com/photo-1522337660859-02fbefca4702?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
+                      <div className="absolute inset-0 bg-[#463E3E]/10 group-hover:bg-transparent transition-colors"></div>
                   </div>
                   <div className="p-8">
-                     <h3 className="text-lg font-medium tracking-widest text-[#463E3E] mb-2">桃園文中店</h3>
-                     <div className="w-8 h-[1px] bg-[#C29591] mb-6"></div>
-                     <div className="flex items-start gap-3 text-xs text-gray-500 leading-relaxed mb-6">
+                      <h3 className="text-lg font-medium tracking-widest text-[#463E3E] mb-2">桃園文中店</h3>
+                      <div className="w-8 h-[1px] bg-[#C29591] mb-6"></div>
+                      <div className="flex items-start gap-3 text-xs text-gray-500 leading-relaxed mb-6">
                         <MapPin size={16} className="text-[#C29591] flex-shrink-0 mt-0.5" />
                         <span>桃園區文中三路 67 號 1 樓</span>
-                     </div>
-                     <button 
-                       onClick={() => window.open('https://www.google.com/maps/search/?api=1&query=桃園區文中三路67號1樓', '_blank')}
-                       className="w-full border border-[#EAE7E2] py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white hover:border-[#463E3E] transition-all"
-                     >
-                       GOOGLE MAPS
-                     </button>
+                      </div>
+                      <button 
+                        onClick={() => window.open('https://www.google.com/maps/search/?api=1&query=桃園區文中三路67號1樓', '_blank')}
+                        className="w-full border border-[#EAE7E2] py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white hover:border-[#463E3E] transition-all"
+                      >
+                        GOOGLE MAPS
+                      </button>
                   </div>
                </div>
             </div>
           </div>
         ) : activeTab === 'contact' ? (
-          // 修正：移除 flex flex-col items-center，改用標準 container + mx-auto 內層
-          <div className="max-w-xl mx-auto px-6 py-12">
+          <div className="max-w-2xl mx-auto px-6 py-12">
+             {/* 修正：將原本的 max-w-xl 改為 max-w-2xl，使區塊更寬闊大器 */}
              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-12">聯絡我們</h2>
              <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
                 <p className="text-sm text-gray-500 mb-6 leading-relaxed">
@@ -1114,7 +1113,6 @@ export default function App() {
              </div>
           </div>
         ) : activeTab === 'home' ? (
-          // 修正：移除 flex flex-col items-center，改為標準流式佈局 + text-center
           <div className="max-w-xl mx-auto px-6 py-12 text-center">
             <div className="mb-10">
               <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm uppercase font-extralight">EST. 2026 • TAOYUAN</span>
