@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, Globe, Layout, MessageCircle, CalendarX, AlertOctagon, Mail } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
-// --- 引入 Storage 模組 ---
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-// --- 引入 EmailJS ---
 import emailjs from '@emailjs/browser';
 
 // --- Firebase 配置 ---
 const firebaseConfig = {
   apiKey: "AIzaSyBkFqTUwtC7MqZ6h4--2_1BmldXEg-Haiw",
-  authDomain: "uniwawa-beauty.com", // 確認網域正確
+  authDomain: "uniwawa-beauty.com", 
   projectId: "uniwawa-beauty",
   storageBucket: "uniwawa-beauty.firebasestorage.app",
   appId: "1:1009617609234:web:3cb5466e79a81c1f1aaecb"
@@ -20,7 +18,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app); // 初始化 Storage
+const storage = getStorage(app);
 const appId = 'uniwawa01';
 
 // --- 常數設定 ---
@@ -30,7 +28,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; 
 const MAX_BOOKING_DAYS = 30; 
 
-// 預約須知內容 (用於顯示與寄信)
+// 預約須知內容
 const NOTICE_CONTENT = `
 【預約須知】
 1. 本店採網站預約制，請依系統開放的時段與服務項目進行預約。
@@ -73,7 +71,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   const [localAddonId, setLocalAddonId] = useState('');
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
-  // --- 新增：滑動所需的 state ---
+  // 滑動 State
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const minSwipeDistance = 50; 
@@ -88,7 +86,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
     setCurrentIdx((prev) => (prev - 1 + images.length) % images.length);
   };
 
-  // --- 新增：滑動邏輯 ---
   const onTouchStart = (e) => {
     setTouchEnd(null); 
     setTouchStart(e.targetTouches[0].clientX);
@@ -104,12 +101,8 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
 
-    if (isLeftSwipe) {
-      nextImg(null); // 左滑下一張
-    }
-    if (isRightSwipe) {
-      prevImg(null); // 右滑上一張
-    }
+    if (isLeftSwipe) nextImg(null);
+    if (isRightSwipe) prevImg(null);
   };
 
   const handleBookingClick = () => {
@@ -125,7 +118,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
           <button onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
         </div>
       )}
-      {/* touch 事件監聽 */}
+      
       <div 
         className="aspect-[3/4] overflow-hidden relative bg-gray-50"
         onTouchStart={onTouchStart}
@@ -147,7 +140,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         <span className="text-xs text-[#C29591] tracking-[0.3em] uppercase mb-2 font-medium">{item.category}</span>
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
         
-        {/* Hashtags Display */}
         {item.tags && item.tags.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2 mb-3 mt-1">
             {item.tags.map((tag, idx) => (
@@ -195,9 +187,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
   const [viewDate, setViewDate] = useState(new Date());
 
   useEffect(() => {
-    if (selectedDate) {
-      setViewDate(new Date(selectedDate));
-    }
+    if (selectedDate) setViewDate(new Date(selectedDate));
   }, [selectedDate]);
 
   const currentMonth = viewDate.getMonth();
@@ -314,7 +304,7 @@ export default function App() {
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
-  // shopSettings 包含：stores, staff, holidays, styleCategories, savedTags
+  
   const [shopSettings, setShopSettings] = useState({ 
     stores: [], staff: [], holidays: [], 
     styleCategories: DEFAULT_CATEGORIES,
@@ -323,13 +313,11 @@ export default function App() {
   const [newHolidayInput, setNewHolidayInput] = useState({ date: '', storeId: 'all' });
   const [newStoreInput, setNewStoreInput] = useState('');
   
-  // 管理中心狀態
   const [managerTab, setManagerTab] = useState('stores'); 
   const [bookingViewMode, setBookingViewMode] = useState('list'); 
   const [adminSelectedDate, setAdminSelectedDate] = useState('');
   const [adminSelectedStore, setAdminSelectedStore] = useState('all');
 
-  // 新增/管理用的輸入變數
   const [addonForm, setAddonForm] = useState({ name: '', price: '', duration: '' });
   const [newCategoryInput, setNewCategoryInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
@@ -338,7 +326,6 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedAddon, setSelectedAddon] = useState(null);
   
-  // --- 2. 新增 email 狀態 ---
   const [bookingData, setBookingData] = useState({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -353,7 +340,6 @@ export default function App() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
-  // --- 新增：用來暫存還沒上傳的「原始檔案」 ---
   const [rawFiles, setRawFiles] = useState([]); 
 
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -502,7 +488,6 @@ export default function App() {
     const selectedStore = shopSettings.stores.find(s => s.id === bookingData.storeId);
 
     try {
-      // 1. 寫入 Firebase
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookingData,
         storeName: selectedStore ? selectedStore.name : '未指定',
@@ -513,9 +498,8 @@ export default function App() {
         createdAt: serverTimestamp()
       });
 
-      // 2. --- 發送 EmailJS ---
       const templateParams = {
-        to_email: bookingData.email,     // 這裡對應 EmailJS 後台的 {{to_email}}
+        to_email: bookingData.email,
         staff_email: 'unibeatuy@gmail.com',
         to_name: bookingData.name,
         phone: bookingData.phone,
@@ -529,11 +513,7 @@ export default function App() {
         notice_content: NOTICE_CONTENT
       };
 
-      console.log("正在發送郵件，參數為：", templateParams);
-
-      const response = await emailjs.send('service_uniwawa', 'template_d5tq1z9', templateParams, 'ehbGdRtZaXWft7qLM');
-      console.log('SUCCESS!', response.status, response.text);
-
+      await emailjs.send('service_uniwawa', 'template_d5tq1z9', templateParams, 'ehbGdRtZaXWft7qLM');
       alert('預約成功！確認信已發送。');
       setBookingStep('success');
 
@@ -554,21 +534,14 @@ export default function App() {
       const durationVal = Number(formData.duration);
       if (isNaN(priceVal) || isNaN(durationVal)) throw new Error("價格或時間必須為數字");
 
-      // 1. 處理圖片上傳：
       let finalImageUrls = formData.images.filter(url => !url.startsWith('blob:')); 
 
-      // 如果有新選擇的檔案 (rawFiles)，將它們上傳到 Firebase Storage
       if (rawFiles.length > 0) {
         const uploadPromises = rawFiles.map(async (file) => {
-          // 設定檔案路徑：nail_designs/當下時間_檔名
           const storageRef = ref(storage, `nail_designs/${Date.now()}_${file.name}`);
-          // 上傳檔案
           const snapshot = await uploadBytes(storageRef, file);
-          // 取得下載網址
           return await getDownloadURL(snapshot.ref);
         });
-
-        // 等待所有圖片上傳完成
         const newUrls = await Promise.all(uploadPromises);
         finalImageUrls = [...finalImageUrls, ...newUrls];
       }
@@ -589,7 +562,7 @@ export default function App() {
       
       setIsUploadModalOpen(false);
       setFormData({ title: '', price: '', category: shopSettings.styleCategories[0] || '極簡氣質', duration: '90', images: [], tags: '' });
-      setRawFiles([]); // 清空暫存
+      setRawFiles([]);
       alert("發布成功！");
     } catch (err) { alert("儲存失敗：" + err.message); } finally { setIsUploading(false); }
   };
@@ -613,7 +586,6 @@ export default function App() {
     }
   };
 
-  // 使用 shopSettings 中的分類，若有'全部'則需加入
   const activeCategories = ['全部', ...shopSettings.styleCategories];
 
   const filteredItems = cloudItems.filter(item => {
@@ -632,14 +604,13 @@ export default function App() {
 
   const isNameInvalid = /\d/.test(bookingData.name);
   const isPhoneInvalid = bookingData.phone.length > 0 && bookingData.phone.length !== 10;
-  // --- 簡單 Email 驗證 ---
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bookingData.email);
 
   const isFormValid = 
     bookingData.name.trim() !== '' && 
     !isNameInvalid &&
     bookingData.phone.length === 10 && 
-    isEmailValid && // 檢查 email
+    isEmailValid &&
     bookingData.time !== '' &&
     bookingData.storeId !== '';
 
@@ -681,8 +652,6 @@ export default function App() {
   };
 
   return (
-    // 修改：加入 overflow-y-scroll 強制顯示捲動條，避免版面跳動
-    // 並加入自定義 CSS 美化捲軸
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans overflow-y-scroll">
       <style>
         {`
@@ -698,7 +667,6 @@ export default function App() {
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0 justify-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'home' ? 'text-[#C29591]' : ''}`}>首頁</button>
-            {/* 4. 對調款式與須知的位置 */}
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
             <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult([]); setSearchKeyword('');}} className={`flex-shrink-0 ${activeTab === 'search' ? 'text-[#C29591]' : ''}`}>查詢</button>
@@ -717,7 +685,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* 5. 調整手機版上方間距 pt-32 -> pt-24 */}
       <main className="pt-24 md:pt-20 h-screen overflow-hidden">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
@@ -742,7 +709,6 @@ export default function App() {
             </div>
 
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
-              {/* 門市選擇器 */}
               <div className="border-b border-[#EAE7E2] pb-6">
                 <label className="block text-xs font-bold text-gray-400 mb-2">選擇預約門市</label>
                 <div className="flex flex-wrap gap-3">
@@ -911,7 +877,7 @@ export default function App() {
                   <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
                   <div className="text-2xl font-bold text-[#C29591] leading-none">
                     <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
-                    {calcTotalAmount().toLocaleString()}</
+                    {calcTotalAmount().toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -926,7 +892,6 @@ export default function App() {
           </div>
         ) : activeTab === 'notice' ? (
           <div className="max-w-3xl mx-auto py-8 md:py-12 px-6 pb-24 h-full overflow-y-auto">
-            {/* 3. 須知頁面 Icon 刪除，改為簡潔排版 */}
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">預約須知</h2>
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-6">
                 
@@ -978,7 +943,6 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'search' ? ( 
-          // 1. 查詢頁面加入 h-full overflow-y-auto 以確保捲動條顯示
           <div className="max-w-3xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
               <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase text-center mb-8 md:mb-12">預約查詢</h2>
 
@@ -1087,11 +1051,9 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'contact' ? (
-          // 1. 聯絡頁面加入 h-full overflow-y-auto
           <div className="max-w-3xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">聯絡我們</h2>
              <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
-                {/* 2. 修改字體樣式與須知頁面相同 (text-xs text-gray-500) */}
                 <p className="text-xs text-gray-500 mb-6 leading-relaxed">
                   如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
                   (預約請直接使用網站功能)
@@ -1119,7 +1081,6 @@ export default function App() {
             <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
-          // Catalog Tab
           <div className="max-w-7xl mx-auto px-6 py-8 md:py-12 space-y-8 h-full overflow-y-auto">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
                 <div className="flex flex-wrap gap-4 justify-center items-center">
@@ -1136,7 +1097,6 @@ export default function App() {
                    ))}
                 </div>
 
-                {/* Tag Filter Display */}
                 {tagFilter && (
                   <div className="flex justify-center items-center">
                     <button 
@@ -1202,7 +1162,6 @@ export default function App() {
               <button onClick={() => setIsBookingManagerOpen(false)}><X size={24}/></button>
             </div>
 
-            {/* 管理分頁按鈕 */}
             <div className="flex border-b border-[#EAE7E2] px-8 bg-[#FAF9F6] sticky top-0 z-10 overflow-x-auto">
               {[
                 { id: 'stores', label: '門市設定', icon: <Store size={14}/> },
@@ -1222,7 +1181,6 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               
-              {/* --- 0. 門市設定區塊 --- */}
               {managerTab === 'stores' && (
                 <section className="space-y-6 fade-in">
                   <div className="border-l-4 border-[#C29591] pl-4">
@@ -1277,11 +1235,9 @@ export default function App() {
                 </section>
               )}
 
-              {/* --- 1. 商品屬性與加購 --- */}
               {managerTab === 'attributes' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 fade-in">
                   
-                  {/* 第一欄：風格分類管理 */}
                   <section className="space-y-6 lg:col-span-1 border-b lg:border-b-0 lg:border-r border-[#EAE7E2] pb-8 lg:pb-0 lg:pr-8">
                     <div className="border-l-4 border-[#C29591] pl-4">
                       <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">風格分類管理</h4>
@@ -1320,7 +1276,6 @@ export default function App() {
                     </div>
                   </section>
 
-                  {/* 第二欄：常用 Hashtag 管理 */}
                   <section className="space-y-6 lg:col-span-1 border-b lg:border-b-0 lg:border-r border-[#EAE7E2] pb-8 lg:pb-0 lg:pr-8">
                     <div className="border-l-4 border-[#C29591] pl-4">
                         <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">常用標籤 (Hashtag)</h4>
@@ -1356,7 +1311,6 @@ export default function App() {
                     </div>
                   </section>
 
-                  {/* 第三欄：加購品設定 */}
                   <section className="space-y-6 lg:col-span-1">
                     <div className="border-l-4 border-[#C29591] pl-4">
                       <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品項</h4>
@@ -1389,7 +1343,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* --- 2. 人員與休假管理區塊 --- */}
               {managerTab === 'staff_holiday' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 fade-in">
                   <section className="space-y-6">
@@ -1489,7 +1442,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* --- 3. 預約管理區塊 --- */}
               {managerTab === 'bookings' && (
                 <section className="space-y-6 fade-in h-full flex flex-col">
                   <div className="flex justify-between items-center border-b border-dashed pb-4">
@@ -1593,7 +1545,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 款式上傳彈窗 */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
