@@ -1074,7 +1074,7 @@ export default function App() {
               </div>
           </div>
         ) : activeTab === 'store' ? (
-          <div className="max-w-4xl mx-auto py-16 px-6">
+          <div className="max-w-4xl mx-auto py-12 px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">STORE LOCATIONS / 門市資訊</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
@@ -1100,10 +1100,10 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'contact' ? (
-          // --- 新增：聯絡頁面 (修正為顯示 Line 官方帳號連結) ---
-          <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 text-center">
+          // --- 修正：移除 flex center，統一使用 margin-auto ---
+          <div className="max-w-xl mx-auto py-12 px-6 flex flex-col items-center text-center">
              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] mb-8">CONTACT US / 聯絡我們</h2>
-             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm max-w-md w-full flex flex-col items-center">
+             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full flex flex-col items-center">
                 <p className="text-sm text-gray-500 mb-6 leading-relaxed">
                   如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
                   (預約請直接使用網站功能)
@@ -1120,9 +1120,10 @@ export default function App() {
              </div>
           </div>
         ) : activeTab === 'home' ? (
-          <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
+          // --- 修正：移除 flex center，統一使用 margin-auto ---
+          <div className="max-w-xl mx-auto py-12 px-6 flex flex-col items-center text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
-            <div className="w-full max-w-xl mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
+            <div className="w-full mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
             <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
@@ -1607,7 +1608,7 @@ export default function App() {
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
-             <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-6">
               <h3 className="tracking-widest font-light">{editingItem ? '修改款式' : '上傳新款'}</h3>
               <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
             </div>
