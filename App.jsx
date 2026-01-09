@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, User } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -325,7 +325,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('catalog'); 
+  const [activeTab, setActiveTab] = useState('catalog'); // 5. 預設頁面改為 'catalog'
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
@@ -685,7 +685,6 @@ export default function App() {
           ::-webkit-scrollbar-track { background: transparent; }
           ::-webkit-scrollbar-thumb { background: #C29591; border-radius: 3px; }
           ::-webkit-scrollbar-thumb:hover { background: #463E3E; }
-          html { overflow-y: scroll; } /* 強制顯示捲軸軌道，防止跳動 */
         `}
       </style>
 
@@ -1040,7 +1039,7 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
                   <div className="aspect-video bg-gray-100 overflow-hidden relative">
-                      <img src="/2.jpg" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
+                      <img src="./2.jpg" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
                       <div className="absolute inset-0 bg-[#463E3E]/10 group-hover:bg-transparent transition-colors"></div>
                   </div>
                   <div className="p-8">
@@ -1061,13 +1060,14 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'about' ? ( 
+          // 4. 新增「關於」頁面 (原首頁內容修改)
           <div className="max-w-3xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">關於 UNIWAWA</h2>
             <div className="bg-white border border-[#EAE7E2] p-8 md:p-12 shadow-sm relative">
                 <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
                 <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
                     <div className="w-full md:w-5/12 aspect-[4/5] bg-gray-100 overflow-hidden relative border border-[#EAE7E2]">
-                         <img src="/1.jpg" className="w-full h-full object-cover" alt="Wawa" />
+                         <img src="./1.jpg" className="w-full h-full object-cover" alt="Wawa" />
                     </div>
                     <div className="flex-1 space-y-6 text-xs text-gray-500 leading-8 text-justify">
                         <p>
@@ -1091,28 +1091,11 @@ export default function App() {
                 </div>
             </div>
           </div>
-        ) : activeTab === 'contact' ? (
-          <div className="max-w-3xl mx-auto px-6">
-             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">聯絡我們</h2>
-             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
-                <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-                  如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
-                  (預約請直接使用網站功能)
-                </p>
-                <a 
-                  href="https://lin.ee/X91bkZ6" 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold hover:opacity-90 transition-opacity tracking-widest text-sm"
-                >
-                   <MessageCircle size={20} />
-                   加入 LINE 好友
-                </a>
-             </div>
-          </div>
         ) : (
+          // Catalog Tab (2. 優化篩選排版)
           <div className="max-w-7xl mx-auto px-6 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
+                {/* Style Filter: 左側標題，右側按鈕群 (Wrap) */}
                 <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
                    <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
                    <div className="flex flex-wrap gap-2 flex-1">
@@ -1128,6 +1111,7 @@ export default function App() {
                    </div>
                 </div>
 
+                {/* Price Filter: 左側標題，右側按鈕群 (Wrap) */}
                 <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
                    <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
                    <div className="flex flex-wrap gap-2 flex-1">
@@ -1226,7 +1210,8 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
-               {managerTab === 'stores' && (
+              
+              {managerTab === 'stores' && (
                 <section className="space-y-6 fade-in">
                   <div className="border-l-4 border-[#C29591] pl-4">
                     <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4>
@@ -1586,6 +1571,114 @@ export default function App() {
                 </section>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
+          <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+              <h3 className="tracking-widest font-light">{editingItem ? '修改款式' : '上傳新款'}</h3>
+              <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
+            </div>
+            <form onSubmit={handleItemSubmit} className="space-y-6">
+                <input type="text" required className="w-full border-b py-2 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
+                
+                <div className="flex gap-4">
+                  <div className="w-1/2">
+                      <label className="text-xs text-gray-400 mb-1 block">價格 (NT$)</label>
+                      <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="輸入價格" />
+                  </div>
+                  <div className="w-1/2">
+                      <label className="text-xs text-gray-400 mb-1 block">服務時間 (分鐘)</label>
+                      <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="預設 90" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                   <label className="text-xs text-gray-400">風格分類</label>
+                   <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-b py-2 outline-none bg-white">
+                     {shopSettings.styleCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                   </select>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs text-gray-400 flex items-center gap-1"><Hash size={10} /> 標籤 (Tags)</label>
+                    <input 
+                      type="text" 
+                      className="w-full border-b py-2 outline-none placeholder-gray-300 text-xs" 
+                      value={formData.tags} 
+                      onChange={e => setFormData({...formData, tags: e.target.value})} 
+                      placeholder="例如：顯白, 夏天 (請用逗號分隔)" 
+                    />
+                    {shopSettings.savedTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {shopSettings.savedTags.map(tag => (
+                                <button 
+                                  type="button"
+                                  key={tag}
+                                  onClick={() => {
+                                      const currentTags = formData.tags ? formData.tags.split(',').map(t => t.trim()) : [];
+                                      if(!currentTags.includes(tag)) {
+                                          const newTags = [...currentTags, tag].filter(t => t).join(', ');
+                                          setFormData({...formData, tags: newTags});
+                                      }
+                                  }}
+                                  className="text-[9px] bg-gray-100 text-gray-500 px-2 py-1 rounded-full hover:bg-[#C29591] hover:text-white transition-colors"
+                                >
+                                  #{tag}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {formData.images.map((img, i) => (
+                    <div key={i} className="relative w-20 h-20 border">
+                      <img src={img} className="w-full h-full object-cover" alt="preview" />
+                      <button type="button" onClick={() => {
+                          setFormData(prev => ({
+                              ...prev, 
+                              images: prev.images.filter((_, idx) => idx !== i)
+                          }));
+                      }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
+                    </div>
+                  ))}
+                  
+                  <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-[#C29591] text-gray-400 hover:text-[#C29591] transition-colors">
+                    <Upload size={16} />
+                    <input type="file" hidden accept="image/*" multiple onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                          const files = Array.from(e.target.files);
+                          
+                          const validFiles = files.filter(f => {
+                              if (f.size > 1 * 1024 * 1024) {
+                                  alert(`檔案 ${f.name} 超過 1MB，已自動略過`);
+                                  return false;
+                              }
+                              return true;
+                          });
+
+                          const currentTotalSize = rawFiles.reduce((acc, f) => acc + f.size, 0);
+                          const newFilesTotalSize = validFiles.reduce((acc, f) => acc + f.size, 0);
+                          
+                          if (currentTotalSize + newFilesTotalSize > 5 * 1024 * 1024) { 
+                              alert("商品圖片總大小超過 5MB 上限，無法新增更多圖片");
+                              return;
+                          }
+
+                          setRawFiles(prev => [...prev, ...validFiles]);
+
+                          const previewUrls = validFiles.map(f => URL.createObjectURL(f));
+                          setFormData(prev => ({...prev, images: [...prev.images, ...previewUrls]}));
+                      }
+                    }} />
+                  </label>
+                </div>
+                <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase hover:bg-[#C29591] transition-colors">{isUploading ? '處理中...' : '確認發布'}</button>
+            </form>
           </div>
         </div>
       )}
