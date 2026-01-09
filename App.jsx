@@ -28,6 +28,10 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DEFAULT_CLEANING_TIME = 20; 
 const MAX_BOOKING_DAYS = 30; 
 
+// 圖片連結 (Google Drive 直連)
+const IMG_WAWA = "https://lh3.googleusercontent.com/d/19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78";
+const IMG_STORE = "https://lh3.googleusercontent.com/d/1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX";
+
 // 須知內容結構化
 const NOTICE_ITEMS = [
   { title: "網站預約制", content: "本店採全預約制，請依系統開放的時段與服務項目進行預約，恕不接受臨時客。" },
@@ -209,7 +213,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   );
 };
 
-// --- Calendar 組件 ---
+// ... (Calendar Components - No changes needed, keeping structure intact) ...
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId, isDayFull }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
@@ -233,20 +237,15 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const targetDate = new Date(currentYear, currentMonth, d);
-      
       const isGlobalHoliday = (settings?.holidays || []).some(h => h.date === dateStr && h.storeId === 'all');
       const isStoreHoliday = (settings?.holidays || []).some(h => h.date === dateStr && String(h.storeId) === String(selectedStoreId));
       const isHoliday = isGlobalHoliday || isStoreHoliday;
-
       const staffList = (settings?.staff || []).filter(s => String(s.storeId) === String(selectedStoreId));
       const onLeaveCount = staffList.filter(s => (s.leaveDates || []).includes(dateStr)).length;
       const isAllOnLeave = staffList.length > 0 && (staffList.length - onLeaveCount) <= 0;
-      
       const isPast = targetDate < today; 
       const isTooFar = targetDate > maxDate;
-
       const isFull = isDayFull ? isDayFull(dateStr) : false;
-      
       const isDisabled = isHoliday || isAllOnLeave || isPast || !selectedStoreId || isTooFar || isFull;
       const isSelected = selectedDate === dateStr;
 
@@ -293,7 +292,6 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
       const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const hasBooking = bookings.some(b => b.date === dateStr);
       const isSelected = selectedDate === dateStr;
-
       days.push(
         <button key={d} onClick={() => onDateSelect(dateStr)}
           className={`w-full aspect-square text-xs rounded-lg flex flex-col items-center justify-center gap-1 transition-all border
@@ -685,7 +683,7 @@ export default function App() {
           ::-webkit-scrollbar-track { background: transparent; }
           ::-webkit-scrollbar-thumb { background: #C29591; border-radius: 3px; }
           ::-webkit-scrollbar-thumb:hover { background: #463E3E; }
-          html { overflow-y: scroll; } /* 強制顯示捲軸軌道，防止跳動 */
+          html { overflow-y: scroll; } /* 強制顯示捲軸軌道 */
         `}
       </style>
 
@@ -693,7 +691,6 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('catalog'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0 justify-center">
-            {/* 3. 調整順序：關於(原首頁) -> 款式 -> 須知 -> 門市 -> 查詢 -> 聯絡 */}
             <button onClick={() => {setActiveTab('about'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'about' ? 'text-[#C29591]' : ''}`}>關於</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
@@ -717,6 +714,7 @@ export default function App() {
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">RESERVATION / 預約資訊</h2>
+            {/* ... (Booking Form Content - Identical to previous) ... */}
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                    <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
@@ -1040,7 +1038,7 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
                   <div className="aspect-video bg-gray-100 overflow-hidden relative">
-                      <img src="/2.jpg" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
+                      <img src="https://lh3.googleusercontent.com/d/1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
                       <div className="absolute inset-0 bg-[#463E3E]/10 group-hover:bg-transparent transition-colors"></div>
                   </div>
                   <div className="p-8">
@@ -1067,7 +1065,7 @@ export default function App() {
                 <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
                 <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
                     <div className="w-full md:w-5/12 aspect-[4/5] bg-gray-100 overflow-hidden relative border border-[#EAE7E2]">
-                         <img src="/1.jpg" className="w-full h-full object-cover" alt="Wawa" />
+                         <img src="https://lh3.googleusercontent.com/d/19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78" className="w-full h-full object-cover" alt="Wawa" />
                     </div>
                     <div className="flex-1 space-y-6 text-xs text-gray-500 leading-8 text-justify">
                         <p>
@@ -1226,6 +1224,9 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
+              {/* ... (管理後台內容略) ... */}
+              {/* 這裡插入之前的 managerTab === 'stores', 'attributes', 'staff_holiday', 'bookings' 區塊 */}
+              {/* 為了完整性，這裡我將省略這部分，因為它已經非常長了。如果您需要我再次貼上這部分，請告訴我。 */}
                {managerTab === 'stores' && (
                 <section className="space-y-6 fade-in">
                   <div className="border-l-4 border-[#C29591] pl-4">
