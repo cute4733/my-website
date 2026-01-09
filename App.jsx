@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, User } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -128,9 +128,9 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         </div>
       )}
       
-      {/* 4. 修改：加入 touch-pan-x 防止垂直捲動 */}
+      {/* 1. 修改：移除了 touch-pan-x，允許使用者在圖片上也能上下滑動網頁 */}
       <div 
-        className="aspect-[3/4] overflow-hidden relative bg-gray-50 touch-pan-x"
+        className="aspect-[3/4] overflow-hidden relative bg-gray-50"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -145,7 +145,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         
         {images.length > 1 && (
           <>
-            {/* 1. 修改：手機版箭頭樣式，改用 darker background 確保可見度 */}
             <button 
               onClick={prevImg} 
               className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/30 hover:bg-black/50 text-white rounded-full z-10 backdrop-blur-sm transition-colors"
@@ -211,7 +210,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   );
 };
 
-// ... (Calendar 元件保持不變，為節省篇幅略過，請保留原本的 CustomCalendar 與 AdminBookingCalendar 程式碼) ...
+// --- Calendar 組件 ---
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId, isDayFull }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
@@ -327,7 +326,8 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('home');
+  // 5. 修改：預設頁面改為 'catalog' (款式)
+  const [activeTab, setActiveTab] = useState('catalog');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
@@ -692,13 +692,14 @@ export default function App() {
 
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
-          <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
+          <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('catalog'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0 justify-center">
-            <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'home' ? 'text-[#C29591]' : ''}`}>首頁</button>
+            {/* 3. 調整順序：關於(原首頁) -> 款式 -> 須知 -> 門市 -> 查詢 -> 聯絡 */}
+            <button onClick={() => {setActiveTab('about'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'about' ? 'text-[#C29591]' : ''}`}>關於</button>
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
             <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
-            <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult([]); setSearchKeyword('');}} className={`flex-shrink-0 ${activeTab === 'search' ? 'text-[#C29591]' : ''}`}>查詢</button>
             <button onClick={() => {setActiveTab('store'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'store' ? 'text-[#C29591]' : ''}`}>門市</button>
+            <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult([]); setSearchKeyword('');}} className={`flex-shrink-0 ${activeTab === 'search' ? 'text-[#C29591]' : ''}`}>查詢</button>
             <button onClick={() => {setActiveTab('contact'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'contact' ? 'text-[#C29591]' : ''}`}>聯絡</button>
             
             {isLoggedIn ? (
@@ -912,7 +913,7 @@ export default function App() {
             </div>
 
             <button 
-              onClick={() => {setBookingStep('none'); setActiveTab('home');}} 
+              onClick={() => {setBookingStep('none'); setActiveTab('catalog');}} 
               className="w-full mt-8 bg-[#463E3E] text-white py-4 text-xs tracking-[0.2em] font-medium hover:bg-[#C29591] transition-all duration-300 shadow-lg shadow-gray-200 uppercase"
             >
               回到首頁
@@ -925,10 +926,8 @@ export default function App() {
             <div className="bg-white border border-[#EAE7E2] p-8 md:p-12 shadow-sm relative">
                 <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
                 
-                {/* 1. 調整間距：space-y-8 -> space-y-5 */}
                 <div className="space-y-5">
                   {NOTICE_ITEMS.map((item, index) => (
-                    // 1. 調整間距：pb-8 -> pb-5
                     <div key={index} className="group flex flex-col md:flex-row gap-2 md:gap-6 border-b border-dashed border-gray-100 pb-5 last:border-0 last:pb-0">
                        <div className="flex-shrink-0">
                           <span className="text-2xl md:text-3xl font-serif italic text-[#C29591]/80 font-light">
@@ -1062,64 +1061,76 @@ export default function App() {
                </div>
             </div>
           </div>
-        ) : activeTab === 'contact' ? (
+        ) : activeTab === 'about' ? ( 
+          // 4. 新增「關於」頁面 (原首頁內容修改)
           <div className="max-w-3xl mx-auto px-6">
-             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">聯絡我們</h2>
-             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
-                <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-                  如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
-                  (預約請直接使用網站功能)
-                </p>
-                <a 
-                  href="https://lin.ee/X91bkZ6" 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold hover:opacity-90 transition-opacity tracking-widest text-sm"
-                >
-                   <MessageCircle size={20} />
-                   加入 LINE 好友
-                </a>
-             </div>
-          </div>
-        ) : activeTab === 'home' ? (
-          <div className="max-w-xl mx-auto px-6 text-center">
-            <div className="mb-10">
-              <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm uppercase font-extralight">EST. 2026 • TAOYUAN</span>
+            <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">關於 UNIWAWA</h2>
+            <div className="bg-white border border-[#EAE7E2] p-8 md:p-12 shadow-sm relative">
+                <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
+                <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+                    <div className="flex-1 space-y-6 text-xs text-gray-500 leading-8 text-justify">
+                        <p>
+                           創業八年的 <span className="font-bold text-[#463E3E]">UNIWAWA 藝術蛋糕師 Wawa (娃娃)</span>，
+                           始終對美有著不懈的追求與獨到的見解。
+                        </p>
+                        <p>
+                           為了將這份美感延伸至不同的創作形式，Wawa 成立了全新的美甲品牌。
+                           在這裡，指尖是另一種畫布，我們延續了對細節的堅持與藝術的熱愛，
+                           期望能為每一位顧客帶來獨一無二的指尖藝術體驗。
+                        </p>
+                        <p>
+                           無論是甜點還是美甲，UNIWAWA 都致力於傳遞一份純粹的美好與感動。
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-12 pt-8 border-t border-[#EAE7E2] text-center">
+                    <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-8 py-3 text-xs tracking-widest hover:bg-[#C29591] transition-colors rounded-full">
+                        查看款式
+                    </button>
+                </div>
             </div>
-            <div className="w-full mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
-              <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
-            </div>
-            <h2 className="text-4xl md:text-5xl font-extralight mb-12 tracking-[0.4em] text-[#463E3E] leading-relaxed">Pure Art</h2>
-            <button onClick={() => setActiveTab('catalog')} className="bg-[#463E3E] text-white px-16 py-4 tracking-[0.4em] text-xs font-light">點此預約</button>
           </div>
         ) : (
+          // Catalog Tab (2. 優化篩選排版)
           <div className="max-w-7xl mx-auto px-6 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
-                {/* 2 & 3 修改：使用 items-start 靠左對齊，STYLE 允許換行 */}
-                <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start md:items-center">
-                   <span className="text-[10px] text-gray-300 tracking-widest mr-2 whitespace-nowrap">STYLE</span>
-                   <div className="flex flex-wrap gap-2 md:gap-4">
+                {/* Style Filter: 左側標題，右側按鈕群 (Wrap) */}
+                <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
+                   <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
+                   <div className="flex flex-wrap gap-2 flex-1">
                      {activeCategories.map(c => (
-                       <button key={c} onClick={() => setStyleFilter(c)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 whitespace-nowrap ${styleFilter===c ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{c}</button>
+                       <button 
+                         key={c} 
+                         onClick={() => setStyleFilter(c)} 
+                         className={`px-4 py-1.5 text-xs rounded-full border transition-all duration-300 ${styleFilter===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}
+                       >
+                         {c}
+                       </button>
                      ))}
                    </div>
                 </div>
 
-                {/* 2 & 3 修改：使用 items-start 靠左對齊，PRICE 強制一行不換行 (flex-nowrap + overflow-x-auto) */}
-                <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start md:items-center">
-                   <span className="text-[10px] text-gray-300 tracking-widest mr-2 whitespace-nowrap">PRICE</span>
-                   <div className="flex flex-nowrap overflow-x-auto no-scrollbar gap-2 md:gap-4 w-full md:w-auto">
+                {/* Price Filter: 左側標題，右側按鈕群 (Wrap) */}
+                <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
+                   <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
+                   <div className="flex flex-wrap gap-2 flex-1">
                      {PRICE_CATEGORIES.map(p => (
-                       <button key={p} onClick={() => setPriceFilter(p)} className={`text-xs tracking-widest px-4 py-1 transition-all duration-300 whitespace-nowrap flex-shrink-0 ${priceFilter===p ? 'text-[#C29591] font-bold border-b border-[#C29591]' : 'text-gray-400 hover:text-[#463E3E]'}`}>{p}</button>
+                       <button 
+                         key={p} 
+                         onClick={() => setPriceFilter(p)} 
+                         className={`px-4 py-1.5 text-xs rounded-full border transition-all duration-300 ${priceFilter===p ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}
+                       >
+                         {p}
+                       </button>
                      ))}
                    </div>
                 </div>
 
                 {tagFilter && (
-                  <div className="flex justify-start md:justify-center items-center">
+                  <div className="flex justify-start md:justify-center items-center mt-2">
                     <button 
                       onClick={() => setTagFilter('')}
-                      className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs tracking-wide hover:bg-[#463E3E] transition-colors"
+                      className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs tracking-wide hover:bg-[#463E3E] transition-colors shadow-sm"
                     >
                       正在瀏覽標籤：#{tagFilter} <X size={14} />
                     </button>
@@ -1198,8 +1209,12 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
+              {/* ... (管理後台內容與之前相同，為節省篇幅略過，請使用之前的程式碼) ... */}
+              {/* 請注意：這裡的內容完全沒有變動，直接複製之前的即可 */}
+              {/* 為了完整性，這裡我將省略這部分，因為它已經非常長了。如果您需要我再次貼上這部分，請告訴我。 */}
               
-              {managerTab === 'stores' && (
+              {/* 這裡插入之前的 managerTab === 'stores', 'attributes', 'staff_holiday', 'bookings' 區塊 */}
+               {managerTab === 'stores' && (
                 <section className="space-y-6 fade-in">
                   <div className="border-l-4 border-[#C29591] pl-4">
                     <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4>
