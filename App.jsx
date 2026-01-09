@@ -698,8 +698,9 @@ export default function App() {
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0 justify-center">
             <button onClick={() => {setActiveTab('home'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'home' ? 'text-[#C29591]' : ''}`}>首頁</button>
-            <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
+            {/* 4. 對調款式與須知的位置 */}
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
+            <button onClick={() => {setActiveTab('notice'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'notice' ? 'text-[#C29591]' : ''}`}>須知</button>
             <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult([]); setSearchKeyword('');}} className={`flex-shrink-0 ${activeTab === 'search' ? 'text-[#C29591]' : ''}`}>查詢</button>
             <button onClick={() => {setActiveTab('store'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'store' ? 'text-[#C29591]' : ''}`}>門市</button>
             <button onClick={() => {setActiveTab('contact'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'contact' ? 'text-[#C29591]' : ''}`}>聯絡</button>
@@ -716,10 +717,11 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="pt-32 md:pt-20">
+      {/* 5. 調整手機版上方間距 pt-32 -> pt-24 */}
+      <main className="pt-24 md:pt-20 h-screen overflow-hidden">
         {bookingStep === 'form' ? (
-          <div className="max-w-2xl mx-auto px-6 py-12">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">RESERVATION / 預約資訊</h2>
+          <div className="max-w-2xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">RESERVATION / 預約資訊</h2>
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                    <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
@@ -840,7 +842,7 @@ export default function App() {
             </div>
           </div>
         ) : bookingStep === 'success' ? (
-          <div className="max-w-lg mx-auto py-12 px-6">
+          <div className="max-w-lg mx-auto py-8 md:py-12 px-6 h-full overflow-y-auto">
             <div className="text-center mb-10">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#FAF9F6] mb-4">
                 <CheckCircle size={32} className="text-[#C29591]" />
@@ -909,7 +911,7 @@ export default function App() {
                   <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
                   <div className="text-2xl font-bold text-[#C29591] leading-none">
                     <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
-                    {calcTotalAmount().toLocaleString()}
+                    {calcTotalAmount().toLocaleString()}</
                   </div>
                 </div>
               </div>
@@ -923,68 +925,49 @@ export default function App() {
             </button>
           </div>
         ) : activeTab === 'notice' ? (
-          <div className="max-w-3xl mx-auto py-12 px-6 pb-24 h-full overflow-y-auto">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">預約須知</h2>
+          <div className="max-w-3xl mx-auto py-8 md:py-12 px-6 pb-24 h-full overflow-y-auto">
+            {/* 3. 須知頁面 Icon 刪除，改為簡潔排版 */}
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">預約須知</h2>
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-6">
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
-                        <Globe size={18} />
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                
+                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                         本店採 <span className="font-bold text-[#463E3E]">網站預約制</span>，請依系統開放的時段與服務項目進行預約
                     </p>
                 </div>
 
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
-                        <Layout size={18} />
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                         服務款式以 <span className="font-bold text-[#463E3E]">網站上提供內容為主</span>，暫不提供帶圖或客製設計
                     </p>
                 </div>
 
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-red-50 rounded-full flex-shrink-0 text-red-400">
-                        <AlertTriangle size={18} />
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                         為了衛生與施作安全考量，<span className="text-red-400">恕不提供病甲（如黴菌感染、卷甲、崁甲、灰指甲等）相關服務</span>，敬請理解
                     </p>
                 </div>
 
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
-                        <Clock size={18} />
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                         若遲到 <span className="font-bold text-[#463E3E]">超過 10 分鐘</span>，將視當日狀況調整服務內容，遲到或其他相關問題請聯絡 LINE 官方客服
                     </p>
                 </div>
 
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
-                        <MessageCircle size={18} />
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                         LINE 官方帳號僅協助處理當日狀況，恕不作為預約或保留時段之管道
                     </p>
                 </div>
 
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
-                        <CalendarX size={18} />
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                         如需取消或改期，請於 <span className="font-bold text-[#463E3E]">預約 24 小時前</span> 告知；未提前取消或未到者，將無法再接受後續預約，謝謝您的體諒
                     </p>
                 </div>
 
-                <div className="flex items-start gap-4">
-                    <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
-                        <ShieldCheck size={18} />
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                <div className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                         施作後 7 日內非人為因素脫落，可協助免費補修，補修請提前預約
                     </p>
                 </div>
@@ -995,9 +978,9 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'search' ? ( 
-          <div className="max-w-3xl mx-auto px-6 py-12">
-              {/* 修正：將寬度調整為 max-w-3xl，與「須知」頁面一致 */}
-              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase text-center mb-12">預約查詢</h2>
+          // 1. 查詢頁面加入 h-full overflow-y-auto 以確保捲動條顯示
+          <div className="max-w-3xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase text-center mb-8 md:mb-12">預約查詢</h2>
 
               <form onSubmit={handleSearchBooking} autoComplete="off" className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
                 <input 
@@ -1012,7 +995,7 @@ export default function App() {
                 </button>
               </form>
 
-              <div className="space-y-6">
+              <div className="space-y-6 pb-24">
               {searchResult.map((booking) => (
                   <div key={booking.id} className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
                     <div className="h-1 w-full bg-[#C29591]"></div>
@@ -1078,8 +1061,8 @@ export default function App() {
               </div>
           </div>
         ) : activeTab === 'store' ? (
-          <div className="max-w-4xl mx-auto px-6 py-12">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">門市資訊</h2>
+          <div className="max-w-4xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">門市資訊</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
                   <div className="aspect-video bg-gray-100 overflow-hidden relative">
@@ -1104,11 +1087,12 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'contact' ? (
-          <div className="max-w-3xl mx-auto px-6 py-12">
-             {/* 修正：將寬度調整為 max-w-3xl，與「須知」頁面一致 */}
-             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-12">聯絡我們</h2>
+          // 1. 聯絡頁面加入 h-full overflow-y-auto
+          <div className="max-w-3xl mx-auto px-6 py-8 md:py-12 h-full overflow-y-auto">
+             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">聯絡我們</h2>
              <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
-                <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                {/* 2. 修改字體樣式與須知頁面相同 (text-xs text-gray-500) */}
+                <p className="text-xs text-gray-500 mb-6 leading-relaxed">
                   如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
                   (預約請直接使用網站功能)
                 </p>
@@ -1124,7 +1108,7 @@ export default function App() {
              </div>
           </div>
         ) : activeTab === 'home' ? (
-          <div className="max-w-xl mx-auto px-6 py-12 text-center">
+          <div className="max-w-xl mx-auto px-6 py-8 md:py-12 text-center h-full overflow-y-auto">
             <div className="mb-10">
               <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm uppercase font-extralight">EST. 2026 • TAOYUAN</span>
             </div>
@@ -1136,7 +1120,7 @@ export default function App() {
           </div>
         ) : (
           // Catalog Tab
-          <div className="max-w-7xl mx-auto px-6 py-12 space-y-8">
+          <div className="max-w-7xl mx-auto px-6 py-8 md:py-12 space-y-8 h-full overflow-y-auto">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
                 <div className="flex flex-wrap gap-4 justify-center items-center">
                    <span className="text-[10px] text-gray-300 tracking-widest mr-2">STYLE</span>
@@ -1165,7 +1149,7 @@ export default function App() {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16 pb-24">
               {filteredItems.map(item => (
                 <StyleCard key={item.id} item={item} isLoggedIn={isLoggedIn}
                   onEdit={(i) => {
