@@ -209,7 +209,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   );
 };
 
-// --- Calendar 元件 ---
+// --- Calendar 組件 ---
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId, isDayFull }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
@@ -1061,7 +1061,6 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'about' ? ( 
-          // 4. 新增「關於」頁面 (原首頁內容修改)
           <div className="max-w-3xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">關於 UNIWAWA</h2>
             <div className="bg-white border border-[#EAE7E2] p-8 md:p-12 shadow-sm relative">
@@ -1092,11 +1091,28 @@ export default function App() {
                 </div>
             </div>
           </div>
+        ) : activeTab === 'contact' ? (
+          <div className="max-w-3xl mx-auto px-6">
+             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8 md:mb-12">聯絡我們</h2>
+             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
+                <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+                  如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
+                  (預約請直接使用網站功能)
+                </p>
+                <a 
+                  href="https://lin.ee/X91bkZ6" 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold hover:opacity-90 transition-opacity tracking-widest text-sm"
+                >
+                   <MessageCircle size={20} />
+                   加入 LINE 好友
+                </a>
+             </div>
+          </div>
         ) : (
-          // Catalog Tab (2. 優化篩選排版)
           <div className="max-w-7xl mx-auto px-6 space-y-8">
             <div className="flex flex-col gap-6 border-b border-[#EAE7E2] pb-8 mb-8">
-                {/* Style Filter: 左側標題，右側按鈕群 (Wrap) */}
                 <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
                    <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
                    <div className="flex flex-wrap gap-2 flex-1">
@@ -1112,7 +1128,6 @@ export default function App() {
                    </div>
                 </div>
 
-                {/* Price Filter: 左側標題，右側按鈕群 (Wrap) */}
                 <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
                    <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
                    <div className="flex flex-wrap gap-2 flex-1">
@@ -1211,8 +1226,7 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
-              
-              {managerTab === 'stores' && (
+               {managerTab === 'stores' && (
                 <section className="space-y-6 fade-in">
                   <div className="border-l-4 border-[#C29591] pl-4">
                     <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4>
