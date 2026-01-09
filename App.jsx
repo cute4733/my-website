@@ -67,7 +67,7 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-// --- 子組件：款式卡片 (已新增滑動功能) ---
+// --- 子組件：款式卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [localAddonId, setLocalAddonId] = useState('');
@@ -125,7 +125,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
           <button onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
         </div>
       )}
-      {/* 修改：加入 touch 事件監聽 */}
+      {/* touch 事件監聽 */}
       <div 
         className="aspect-[3/4] overflow-hidden relative bg-gray-50"
         onTouchStart={onTouchStart}
@@ -555,7 +555,6 @@ export default function App() {
       if (isNaN(priceVal) || isNaN(durationVal)) throw new Error("價格或時間必須為數字");
 
       // 1. 處理圖片上傳：
-      // --- 修正重點：只保留非 blob: 開頭的網址（即舊的真實網址），過濾掉預覽圖 ---
       let finalImageUrls = formData.images.filter(url => !url.startsWith('blob:')); 
 
       // 如果有新選擇的檔案 (rawFiles)，將它們上傳到 Firebase Storage
@@ -692,7 +691,6 @@ export default function App() {
             <button onClick={() => {setActiveTab('catalog'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'catalog' ? 'text-[#C29591]' : ''}`}>款式</button>
             <button onClick={() => {setActiveTab('search'); setBookingStep('none'); setSearchResult([]); setSearchKeyword('');}} className={`flex-shrink-0 ${activeTab === 'search' ? 'text-[#C29591]' : ''}`}>查詢</button>
             <button onClick={() => {setActiveTab('store'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'store' ? 'text-[#C29591]' : ''}`}>門市</button>
-            {/* 新增的聯絡按鈕 */}
             <button onClick={() => {setActiveTab('contact'); setBookingStep('none');}} className={`flex-shrink-0 ${activeTab === 'contact' ? 'text-[#C29591]' : ''}`}>聯絡</button>
             
             {isLoggedIn ? (
@@ -710,7 +708,7 @@ export default function App() {
       <main className="pt-32 md:pt-20">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6 py-12">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">RESERVATION / 預約資訊</h2>
             <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                    <div className="w-24 h-24 flex-shrink-0 bg-gray-50 border border-[#F0EDEA]">
@@ -776,7 +774,6 @@ export default function App() {
                   }} 
                 />
 
-                {/* --- 3. 新增 Email 輸入框 --- */}
                 <input 
                   autoComplete="off"
                   required 
@@ -916,9 +913,8 @@ export default function App() {
           </div>
         ) : activeTab === 'notice' ? (
           <div className="max-w-3xl mx-auto py-12 px-6 pb-24 h-full overflow-y-auto">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">RESERVATION POLICY / 預約須知</h2>
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">預約須知</h2>
             <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-6">
-                {/* 須知項目：Icon + 文字 */}
                 <div className="flex items-start gap-4">
                     <div className="p-2 bg-[#FAF9F6] rounded-full flex-shrink-0 text-[#C29591]">
                         <Globe size={18} />
@@ -988,11 +984,9 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'search' ? ( 
-          <div className="max-w-lg mx-auto py-12 px-6">
-              <div className="text-center mb-12">
-                 <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking / 查詢預約</h2>
-                 <p className="text-xs text-gray-400 tracking-widest">請輸入預約時的 手機 或 姓名 以查詢</p>
-              </div>
+          <div className="max-w-lg mx-auto px-6 py-12">
+              {/* 修正：移除多餘的 div，直接與其他頁面保持一致 */}
+              <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase text-center mb-12">預約查詢</h2>
 
               <form onSubmit={handleSearchBooking} autoComplete="off" className="flex flex-col gap-4 mb-12 bg-white p-8 border border-[#EAE7E2] shadow-sm">
                 <input 
@@ -1007,7 +1001,6 @@ export default function App() {
                 </button>
               </form>
 
-              {/* 歷史訂單顯示區塊 */}
               <div className="space-y-6">
               {searchResult.map((booking) => (
                   <div key={booking.id} className="bg-white border border-[#EAE7E2] shadow-lg shadow-gray-100/50 overflow-hidden relative fade-in">
@@ -1074,9 +1067,10 @@ export default function App() {
               </div>
           </div>
         ) : activeTab === 'store' ? (
-          <div className="max-w-4xl mx-auto py-12 px-6">
-            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">STORE LOCATIONS / 門市資訊</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="max-w-4xl mx-auto px-6 py-12">
+            {/* 修正：嚴格與其他頁面 H2 樣式與間距一致 */}
+            <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">門市資訊</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
                   <div className="aspect-video bg-gray-100 overflow-hidden relative">
                      <img src="https://images.unsplash.com/photo-1522337660859-02fbefca4702?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
@@ -1100,10 +1094,10 @@ export default function App() {
             </div>
           </div>
         ) : activeTab === 'contact' ? (
-          // --- 修正：移除 flex center，統一使用 margin-auto ---
-          <div className="max-w-xl mx-auto py-12 px-6 flex flex-col items-center text-center">
-             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] mb-8">CONTACT US / 聯絡我們</h2>
-             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full flex flex-col items-center">
+          // 修正：移除 flex flex-col items-center，改用標準 container + mx-auto 內層
+          <div className="max-w-xl mx-auto px-6 py-12">
+             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-12">聯絡我們</h2>
+             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm w-full mx-auto flex flex-col items-center text-center">
                 <p className="text-sm text-gray-500 mb-6 leading-relaxed">
                   如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
                   (預約請直接使用網站功能)
@@ -1120,9 +1114,11 @@ export default function App() {
              </div>
           </div>
         ) : activeTab === 'home' ? (
-          // --- 修正：移除 flex center，統一使用 margin-auto ---
-          <div className="max-w-xl mx-auto py-12 px-6 flex flex-col items-center text-center">
-            <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
+          // 修正：移除 flex flex-col items-center，改為標準流式佈局 + text-center
+          <div className="max-w-xl mx-auto px-6 py-12 text-center">
+            <div className="mb-10">
+              <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm uppercase font-extralight">EST. 2026 • TAOYUAN</span>
+            </div>
             <div className="w-full mb-12 shadow-2xl rounded-sm overflow-hidden border border-[#EAE7E2]">
               <img src="https://drive.google.com/thumbnail?id=1ZJv3DS8ST_olFt0xzKB_miK9UKT28wMO&sz=w1200" className="w-full h-auto max-h-[40vh] object-cover" alt="home" />
             </div>
