@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, Globe, Layout, MessageCircle, CalendarX, AlertOctagon } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Info, AlertTriangle, ShieldCheck, Calendar, Briefcase, Tag, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, Globe, Layout, MessageCircle, CalendarX, AlertOctagon, Mail } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -67,20 +67,49 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-// --- 子組件：款式卡片 ---
+// --- 子組件：款式卡片 (已新增滑動功能) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [localAddonId, setLocalAddonId] = useState('');
   const images = item.images && item.images.length > 0 ? item.images : ['https://via.placeholder.com/400x533'];
 
+  // --- 新增：滑動所需的 state ---
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const minSwipeDistance = 50; 
+
   const nextImg = (e) => {
-    e.stopPropagation();
+    if(e) e.stopPropagation();
     setCurrentIdx((prev) => (prev + 1) % images.length);
   };
 
   const prevImg = (e) => {
-    e.stopPropagation();
+    if(e) e.stopPropagation();
     setCurrentIdx((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  // --- 新增：滑動邏輯 ---
+  const onTouchStart = (e) => {
+    setTouchEnd(null); 
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      nextImg(null); // 左滑下一張
+    }
+    if (isRightSwipe) {
+      prevImg(null); // 右滑上一張
+    }
   };
 
   const handleBookingClick = () => {
@@ -96,12 +125,18 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
           <button onClick={(e) => { e.stopPropagation(); if(confirm('確定刪除？')) onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
         </div>
       )}
-      <div className="aspect-[3/4] overflow-hidden relative bg-gray-50">
+      {/* 修改：加入 touch 事件監聽 */}
+      <div 
+        className="aspect-[3/4] overflow-hidden relative bg-gray-50"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
         <img src={images[currentIdx]} className="w-full h-full object-cover transition-opacity duration-300" alt={item.title} />
         {images.length > 1 && (
           <>
-            <button onClick={prevImg} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"><ChevronLeft size={20} /></button>
-            <button onClick={nextImg} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10"><ChevronRight size={20} /></button>
+            <button onClick={prevImg} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 hidden md:block"><ChevronLeft size={20} /></button>
+            <button onClick={nextImg} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/50 hover:bg-white/80 rounded-full z-10 hidden md:block"><ChevronRight size={20} /></button>
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {images.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full ${i === currentIdx ? 'bg-white' : 'bg-white/40'}`} />))}
             </div>
@@ -112,6 +147,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         <span className="text-xs text-[#C29591] tracking-[0.3em] uppercase mb-2 font-medium">{item.category}</span>
         <h3 className="text-[#463E3E] font-medium text-lg tracking-widest mb-1">{item.title}</h3>
         
+        {/* Hashtags Display */}
         {item.tags && item.tags.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2 mb-3 mt-1">
             {item.tags.map((tag, idx) => (
@@ -1063,6 +1099,26 @@ export default function App() {
                </div>
             </div>
           </div>
+        ) : activeTab === 'contact' ? (
+          // --- 新增：聯絡頁面 (修正為顯示 Line 官方帳號連結) ---
+          <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 text-center">
+             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] mb-8">CONTACT US</h2>
+             <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm max-w-md w-full flex flex-col items-center">
+                <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                  如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
+                  (預約請直接使用網站功能)
+                </p>
+                <a 
+                  href="https://lin.ee/X91bkZ6" 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold hover:opacity-90 transition-opacity tracking-widest text-sm"
+                >
+                   <MessageCircle size={20} />
+                   加入 LINE 好友
+                </a>
+             </div>
+          </div>
         ) : activeTab === 'home' ? (
           <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 text-center">
             <span className="text-[#C29591] tracking-[0.4em] md:tracking-[0.8em] text-xs md:text-sm mb-10 uppercase font-extralight">EST. 2026 • TAOYUAN</span>
@@ -1160,7 +1216,6 @@ export default function App() {
             <div className="flex border-b border-[#EAE7E2] px-8 bg-[#FAF9F6] sticky top-0 z-10 overflow-x-auto">
               {[
                 { id: 'stores', label: '門市設定', icon: <Store size={14}/> },
-                // 修改 1: 整合加購品頁面與分類 Hashtag
                 { id: 'attributes', label: '商品屬性與加購', icon: <Layers size={14}/> },
                 { id: 'staff_holiday', label: '人員與休假', icon: <Users size={14}/> },
                 { id: 'bookings', label: '預約管理', icon: <Calendar size={14}/> }
@@ -1232,7 +1287,7 @@ export default function App() {
                 </section>
               )}
 
-              {/* --- 1. 商品屬性與加購 (整合後的分頁) --- */}
+              {/* --- 1. 商品屬性與加購 --- */}
               {managerTab === 'attributes' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 fade-in">
                   
@@ -1552,116 +1607,106 @@ export default function App() {
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-4">
           <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+             <div className="flex justify-between items-center mb-6">
               <h3 className="tracking-widest font-light">{editingItem ? '修改款式' : '上傳新款'}</h3>
               <button onClick={() => setIsUploadModalOpen(false)}><X size={20}/></button>
             </div>
             <form onSubmit={handleItemSubmit} className="space-y-6">
-              <input type="text" required className="w-full border-b py-2 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
-              
-              {/* 修改部分：將價格與服務時間並列顯示，並加上明確標題 */}
-              <div className="flex gap-4">
-                <div className="w-1/2">
-                    <label className="text-xs text-gray-400 mb-1 block">價格 (NT$)</label>
-                    <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="輸入價格" />
-                </div>
-                <div className="w-1/2">
-                    <label className="text-xs text-gray-400 mb-1 block">服務時間 (分鐘)</label>
-                    <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="預設 90" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                 <label className="text-xs text-gray-400">風格分類</label>
-                 <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-b py-2 outline-none bg-white">
-                   {shopSettings.styleCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                 </select>
-              </div>
-
-              {/* Hashtag 輸入框 */}
-              <div className="space-y-2">
-                  <label className="text-xs text-gray-400 flex items-center gap-1"><Hash size={10} /> 標籤 (Tags)</label>
-                  <input 
-                    type="text" 
-                    className="w-full border-b py-2 outline-none placeholder-gray-300 text-xs" 
-                    value={formData.tags} 
-                    onChange={e => setFormData({...formData, tags: e.target.value})} 
-                    placeholder="例如：顯白, 夏天 (請用逗號分隔)" 
-                  />
-                  {/* 常用標籤快速選擇 */}
-                  {shopSettings.savedTags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                          {shopSettings.savedTags.map(tag => (
-                              <button 
-                                type="button"
-                                key={tag}
-                                onClick={() => {
-                                    const currentTags = formData.tags ? formData.tags.split(',').map(t => t.trim()) : [];
-                                    if(!currentTags.includes(tag)) {
-                                        const newTags = [...currentTags, tag].filter(t => t).join(', ');
-                                        setFormData({...formData, tags: newTags});
-                                    }
-                                }}
-                                className="text-[9px] bg-gray-100 text-gray-500 px-2 py-1 rounded-full hover:bg-[#C29591] hover:text-white transition-colors"
-                              >
-                                #{tag}
-                              </button>
-                          ))}
-                      </div>
-                  )}
-              </div>
-
-              {/* --- 修改後的圖片顯示與上傳區塊 (含 1MB/5MB 限制) --- */}
-              <div className="flex flex-wrap gap-2">
-                {formData.images.map((img, i) => (
-                  <div key={i} className="relative w-20 h-20 border">
-                    <img src={img} className="w-full h-full object-cover" alt="preview" />
-                    <button type="button" onClick={() => {
-                        // 簡單移除顯示，若是 rawFiles 的部分，上傳時會多傳(不存DB)或需複雜對應，這裡簡化處理
-                        setFormData(prev => ({
-                            ...prev, 
-                            images: prev.images.filter((_, idx) => idx !== i)
-                        }));
-                    }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
-                  </div>
-                ))}
+                <input type="text" required className="w-full border-b py-2 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="款式名稱" />
                 
-                <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-[#C29591] text-gray-400 hover:text-[#C29591] transition-colors">
-                  <Upload size={16} />
-                  <input type="file" hidden accept="image/*" multiple onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                        const files = Array.from(e.target.files);
-                        
-                        // 1. 檢查單張圖片大小限制 (1MB = 1 * 1024 * 1024 bytes)
-                        const validFiles = files.filter(f => {
-                            if (f.size > 1 * 1024 * 1024) {
-                                alert(`檔案 ${f.name} 超過 1MB，已自動略過`);
-                                return false;
-                            }
-                            return true;
-                        });
+                <div className="flex gap-4">
+                  <div className="w-1/2">
+                      <label className="text-xs text-gray-400 mb-1 block">價格 (NT$)</label>
+                      <input type="number" required className="w-full border-b py-2 outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="輸入價格" />
+                  </div>
+                  <div className="w-1/2">
+                      <label className="text-xs text-gray-400 mb-1 block">服務時間 (分鐘)</label>
+                      <input type="number" required className="w-full border-b py-2 outline-none" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="預設 90" />
+                  </div>
+                </div>
 
-                        // 2. 檢查本批次總大小限制 (這裡僅檢查這批新選的，若要嚴格限制「整個商品」需加總 rawFiles)
-                        // 計算目前暫存區 (rawFiles) 的總大小 + 這批新檔案的大小
-                        const currentTotalSize = rawFiles.reduce((acc, f) => acc + f.size, 0);
-                        const newFilesTotalSize = validFiles.reduce((acc, f) => acc + f.size, 0);
-                        
-                        if (currentTotalSize + newFilesTotalSize > 5 * 1024 * 1024) { // 5MB
-                            alert("商品圖片總大小超過 5MB 上限，無法新增更多圖片");
-                            return;
-                        }
+                <div className="space-y-2">
+                   <label className="text-xs text-gray-400">風格分類</label>
+                   <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-b py-2 outline-none bg-white">
+                     {shopSettings.styleCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                   </select>
+                </div>
 
-                        // 將新檔案加入 rawFiles 狀態
-                        setRawFiles(prev => [...prev, ...validFiles]);
+                <div className="space-y-2">
+                    <label className="text-xs text-gray-400 flex items-center gap-1"><Hash size={10} /> 標籤 (Tags)</label>
+                    <input 
+                      type="text" 
+                      className="w-full border-b py-2 outline-none placeholder-gray-300 text-xs" 
+                      value={formData.tags} 
+                      onChange={e => setFormData({...formData, tags: e.target.value})} 
+                      placeholder="例如：顯白, 夏天 (請用逗號分隔)" 
+                    />
+                    {shopSettings.savedTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {shopSettings.savedTags.map(tag => (
+                                <button 
+                                  type="button"
+                                  key={tag}
+                                  onClick={() => {
+                                      const currentTags = formData.tags ? formData.tags.split(',').map(t => t.trim()) : [];
+                                      if(!currentTags.includes(tag)) {
+                                          const newTags = [...currentTags, tag].filter(t => t).join(', ');
+                                          setFormData({...formData, tags: newTags});
+                                      }
+                                  }}
+                                  className="text-[9px] bg-gray-100 text-gray-500 px-2 py-1 rounded-full hover:bg-[#C29591] hover:text-white transition-colors"
+                                >
+                                  #{tag}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
 
-                        // 產生預覽網址 (Blob URL) 加入 formData 供顯示
-                        const previewUrls = validFiles.map(f => URL.createObjectURL(f));
-                        setFormData(prev => ({...prev, images: [...prev.images, ...previewUrls]}));
-                    }
-                  }} />
-                </label>
-              </div>
-              <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase hover:bg-[#C29591] transition-colors">{isUploading ? '處理中...' : '確認發布'}</button>
+                <div className="flex flex-wrap gap-2">
+                  {formData.images.map((img, i) => (
+                    <div key={i} className="relative w-20 h-20 border">
+                      <img src={img} className="w-full h-full object-cover" alt="preview" />
+                      <button type="button" onClick={() => {
+                          setFormData(prev => ({
+                              ...prev, 
+                              images: prev.images.filter((_, idx) => idx !== i)
+                          }));
+                      }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
+                    </div>
+                  ))}
+                  
+                  <label className="w-20 h-20 border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-[#C29591] text-gray-400 hover:text-[#C29591] transition-colors">
+                    <Upload size={16} />
+                    <input type="file" hidden accept="image/*" multiple onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                          const files = Array.from(e.target.files);
+                          
+                          const validFiles = files.filter(f => {
+                              if (f.size > 1 * 1024 * 1024) {
+                                  alert(`檔案 ${f.name} 超過 1MB，已自動略過`);
+                                  return false;
+                              }
+                              return true;
+                          });
+
+                          const currentTotalSize = rawFiles.reduce((acc, f) => acc + f.size, 0);
+                          const newFilesTotalSize = validFiles.reduce((acc, f) => acc + f.size, 0);
+                          
+                          if (currentTotalSize + newFilesTotalSize > 5 * 1024 * 1024) { 
+                              alert("商品圖片總大小超過 5MB 上限，無法新增更多圖片");
+                              return;
+                          }
+
+                          setRawFiles(prev => [...prev, ...validFiles]);
+
+                          const previewUrls = validFiles.map(f => URL.createObjectURL(f));
+                          setFormData(prev => ({...prev, images: [...prev.images, ...previewUrls]}));
+                      }
+                    }} />
+                  </label>
+                </div>
+                <button disabled={isUploading} className="w-full bg-[#463E3E] text-white py-4 text-xs tracking-widest uppercase hover:bg-[#C29591] transition-colors">{isUploading ? '處理中...' : '確認發布'}</button>
             </form>
           </div>
         </div>
