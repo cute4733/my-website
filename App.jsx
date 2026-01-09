@@ -990,7 +990,7 @@ export default function App() {
         ) : activeTab === 'search' ? ( 
           <div className="max-w-lg mx-auto py-12 px-6">
               <div className="text-center mb-12">
-                 <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking</h2>
+                 <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] uppercase mb-2">Check Booking / 查詢預約</h2>
                  <p className="text-xs text-gray-400 tracking-widest">請輸入預約時的 手機 或 姓名 以查詢</p>
               </div>
 
@@ -1102,7 +1102,7 @@ export default function App() {
         ) : activeTab === 'contact' ? (
           // --- 新增：聯絡頁面 (修正為顯示 Line 官方帳號連結) ---
           <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 text-center">
-             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] mb-8">CONTACT US</h2>
+             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] mb-8">CONTACT US / 聯絡我們</h2>
              <div className="bg-white p-10 border border-[#EAE7E2] shadow-sm max-w-md w-full flex flex-col items-center">
                 <p className="text-sm text-gray-500 mb-6 leading-relaxed">
                   如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>
