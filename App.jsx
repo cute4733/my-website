@@ -681,7 +681,18 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
+    // 修改：加入 overflow-y-scroll 強制顯示捲動條，避免版面跳動
+    // 並加入自定義 CSS 美化捲軸
+    <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans overflow-y-scroll">
+      <style>
+        {`
+          ::-webkit-scrollbar { width: 6px; }
+          ::-webkit-scrollbar-track { background: transparent; }
+          ::-webkit-scrollbar-thumb { background: #C29591; border-radius: 3px; }
+          ::-webkit-scrollbar-thumb:hover { background: #463E3E; }
+        `}
+      </style>
+
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-start md:items-center justify-between transition-all duration-300">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer text-[#463E3E] mb-4 md:mb-0 w-full md:w-auto text-center md:text-left" onClick={() => {setActiveTab('home'); setBookingStep('none');}}>UNIWAWA</h1>
