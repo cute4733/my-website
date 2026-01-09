@@ -653,7 +653,6 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // 1. 移除了 h-screen 和 overflow-y-scroll，改用 min-h-screen 讓網頁自然捲動
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
       <style>
@@ -688,7 +687,8 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="pt-24 md:pt-28 pb-12">
+      {/* 修改：將 pt-24 增加至 pt-32，避免標題被遮擋 */}
+      <main className="pt-32 md:pt-28 pb-12">
         {bookingStep === 'form' ? (
           <div className="max-w-2xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">RESERVATION / 預約資訊</h2>
@@ -897,13 +897,14 @@ export default function App() {
           <div className="max-w-3xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 md:mb-12 text-[#463E3E]">預約須知</h2>
             
-            {/* 2. 美化須知內容 - 雜誌風格排版 */}
             <div className="bg-white border border-[#EAE7E2] p-8 md:p-12 shadow-sm relative">
                 <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
                 
-                <div className="space-y-8">
+                {/* 1. 調整間距：space-y-8 -> space-y-5 */}
+                <div className="space-y-5">
                   {NOTICE_ITEMS.map((item, index) => (
-                    <div key={index} className="group flex flex-col md:flex-row gap-2 md:gap-6 border-b border-dashed border-gray-100 pb-8 last:border-0 last:pb-0">
+                    // 1. 調整間距：pb-8 -> pb-5
+                    <div key={index} className="group flex flex-col md:flex-row gap-2 md:gap-6 border-b border-dashed border-gray-100 pb-5 last:border-0 last:pb-0">
                        <div className="flex-shrink-0">
                           <span className="text-2xl md:text-3xl font-serif italic text-[#C29591]/80 font-light">
                              {String(index + 1).padStart(2, '0')}
@@ -1045,7 +1046,7 @@ export default function App() {
                   (預約請直接使用網站功能)
                 </p>
                 <a 
-                  href="https://lin.ee/X91bkZ6" 
+                  href="https://lin.ee/mjdcvBM" 
                   target="_blank" 
                   rel="noreferrer" 
                   className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold hover:opacity-90 transition-opacity tracking-widest text-sm"
