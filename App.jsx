@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, User } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -128,7 +128,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         </div>
       )}
       
-      {/* 1. 修改：移除了 touch-pan-x，允許使用者在圖片上也能上下滑動網頁 */}
       <div 
         className="aspect-[3/4] overflow-hidden relative bg-gray-50"
         onTouchStart={onTouchStart}
@@ -326,8 +325,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
-  // 5. 修改：預設頁面改為 'catalog' (款式)
-  const [activeTab, setActiveTab] = useState('catalog');
+  const [activeTab, setActiveTab] = useState('catalog'); // 5. 預設頁面改為 'catalog'
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cloudItems, setCloudItems] = useState([]);
   const [addons, setAddons] = useState([]);
@@ -1041,7 +1039,7 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                <div className="bg-white border border-[#EAE7E2] group hover:border-[#C29591] transition-colors duration-300">
                   <div className="aspect-video bg-gray-100 overflow-hidden relative">
-                      <img src="https://images.unsplash.com/photo-1522337660859-02fbefca4702?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
+                      <img src="./2.jpg" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="store" />
                       <div className="absolute inset-0 bg-[#463E3E]/10 group-hover:bg-transparent transition-colors"></div>
                   </div>
                   <div className="p-8">
@@ -1068,6 +1066,9 @@ export default function App() {
             <div className="bg-white border border-[#EAE7E2] p-8 md:p-12 shadow-sm relative">
                 <div className="absolute top-0 left-0 w-full h-1 bg-[#C29591]"></div>
                 <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+                    <div className="w-full md:w-5/12 aspect-[4/5] bg-gray-100 overflow-hidden relative border border-[#EAE7E2]">
+                         <img src="./1.jpg" className="w-full h-full object-cover" alt="Wawa" />
+                    </div>
                     <div className="flex-1 space-y-6 text-xs text-gray-500 leading-8 text-justify">
                         <p>
                            創業八年的 <span className="font-bold text-[#463E3E]">UNIWAWA 藝術蛋糕師 Wawa (娃娃)</span>，
@@ -1209,12 +1210,8 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
-              {/* ... (管理後台內容與之前相同，為節省篇幅略過，請使用之前的程式碼) ... */}
-              {/* 請注意：這裡的內容完全沒有變動，直接複製之前的即可 */}
-              {/* 為了完整性，這裡我將省略這部分，因為它已經非常長了。如果您需要我再次貼上這部分，請告訴我。 */}
               
-              {/* 這裡插入之前的 managerTab === 'stores', 'attributes', 'staff_holiday', 'bookings' 區塊 */}
-               {managerTab === 'stores' && (
+              {managerTab === 'stores' && (
                 <section className="space-y-6 fade-in">
                   <div className="border-l-4 border-[#C29591] pl-4">
                     <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4>
