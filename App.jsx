@@ -190,18 +190,15 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 };
 
 export default function App() {
-  // --- 禁止縮放的核心邏輯 (Start) ---
+  // --- 禁止縮放的核心邏輯 (Updated) ---
   useEffect(() => {
-    // 1. 強制設定 Meta Viewport
+    // 1. 強制設定 Meta Viewport (防止頁面初始化縮放)
     const metaTagId = 'viewport-meta-no-zoom';
     let meta = document.getElementById(metaTagId);
     if (!meta) {
       meta = document.querySelector('meta[name="viewport"]');
     }
-    
-    // 設定 content 禁止 user-scalable
     const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-    
     if (meta) {
       meta.content = content;
     } else {
@@ -213,16 +210,29 @@ export default function App() {
     }
 
     // 2. 阻擋 iOS Safari 雙指縮放手勢 (Gesture Start)
+    // 這是最關鍵的一步，直接禁止 gesture 事件
     const preventGestureZoom = (e) => {
       e.preventDefault();
+      document.body.style.zoom = 0.99; // Hack: 重置 zoom 狀態
     };
     document.addEventListener('gesturestart', preventGestureZoom);
 
-    // 3. (Optional) 阻擋雙擊縮放 - 雖然 CSS touch-action 已經處理，但 JS 可做雙重保險
-    // 這裡我們主要依賴下方的 CSS touch-action: manipulation
+    // 3. 阻擋雙擊縮放 (Double Tap Zoom)
+    // 雖然 CSS touch-action: manipulation 可以解決大部分，但 JS 阻擋更為徹底
+    let lastTouchEnd = 0;
+    const preventDoubleTapZoom = (e) => {
+        const now = (new Date()).getTime();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    };
+    // 注意：這裡使用 { passive: false } 以確保可以執行 preventDefault
+    document.addEventListener('touchend', preventDoubleTapZoom, { passive: false });
 
     return () => {
       document.removeEventListener('gesturestart', preventGestureZoom);
+      document.removeEventListener('touchend', preventDoubleTapZoom);
     };
   }, []);
   // --- 禁止縮放的核心邏輯 (End) ---
