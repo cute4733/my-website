@@ -74,8 +74,8 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
     <div className="group flex flex-col bg-white border border-[#F0EDEA] shadow-sm relative">
       {isLoggedIn && (
         <div className="absolute top-4 right-4 flex gap-2 z-[30]">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-2 bg-white/90 rounded-full text-blue-600 shadow-sm hover:scale-110 transition-transform"><Edit3 size={16}/></button>
-          <button onClick={(e) => { e.stopPropagation(); confirm('確定刪除？') && onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-red-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-2 bg-white/90 rounded-full text-gray-600 shadow-sm hover:scale-110 transition-transform"><Edit3 size={16}/></button>
+          <button onClick={(e) => { e.stopPropagation(); confirm('確定刪除？') && onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-gray-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
         </div>
       )}
       <div className="aspect-[3/4] overflow-hidden relative bg-gray-50" onTouchStart={e=>handleTouch(e,'s')} onTouchMove={e=>handleTouch(e,'m')} onTouchEnd={e=>handleTouch(e,'e')}>
@@ -147,11 +147,28 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
   );
 };
 
-const AdminCalendar = ({ bookings, onDateSelect, selectedDate }) => {
+const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
-  const year = viewDate.getFullYear(); const month = viewDate.getMonth();
-  const days = Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, i) => i + 1);
-  const blanks = Array.from({ length: new Date(year, month, 1).getDay() }, (_, i) => i);
+  const year = viewDate.getFullYear(); 
+  const month = viewDate.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const days = [];
+  for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const hasBooking = bookings.some(b => b.date === dateStr);
+    const isSelected = selectedDate === dateStr;
+    days.push(
+      <button key={d} onClick={() => onDateSelect(dateStr)}
+        className={`w-full aspect-square text-xs rounded-lg flex flex-col items-center justify-center gap-1 transition-all border
+        ${isSelected ? 'border-[#C29591] bg-[#FAF9F6] text-[#C29591] font-bold' : 'border-transparent hover:bg-gray-50'}`}>
+        <span>{d}</span>
+        {hasBooking && <span className="w-1.5 h-1.5 rounded-full bg-[#C29591]"></span>}
+      </button>
+    );
+  }
 
   return (
     <div className="w-full max-w-md mx-auto bg-white border border-[#EAE7E2] p-4 md:p-6 shadow-sm">
@@ -163,18 +180,7 @@ const AdminCalendar = ({ bookings, onDateSelect, selectedDate }) => {
         </div>
       </div>
       <div className="grid grid-cols-7 gap-1 mb-2">{CONSTANTS.DAYS.map(w => <div key={w} className="h-10 flex items-center justify-center text-[10px] text-gray-400 font-bold">{w}</div>)}</div>
-      <div className="grid grid-cols-7 gap-1">
-        {blanks.map(i => <div key={`e-${i}`} />)}
-        {days.map(d => {
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          const hasBooking = bookings.some(b => b.date === dateStr);
-          return (
-            <button key={d} onClick={() => onDateSelect(dateStr)} className={`w-full aspect-square text-xs rounded-lg flex flex-col items-center justify-center gap-1 border transition-all ${selectedDate === dateStr ? 'border-[#C29591] bg-[#FAF9F6] text-[#C29591] font-bold' : 'border-transparent hover:bg-gray-50'}`}>
-              <span>{d}</span>{hasBooking && <span className="w-1.5 h-1.5 rounded-full bg-[#C29591]"></span>}
-            </button>
-          );
-        })}
-      </div>
+      <div className="grid grid-cols-7 gap-1">{days}</div>
     </div>
   );
 };
@@ -276,6 +282,34 @@ export default function App() {
     finally { setStatus(p => ({ ...p, submitting: false })); }
   };
 
+  const handleExportCSV = () => {
+      // 修正 6: 匯出未來 30 日預約，新增電子信箱
+      const today = new Date();
+      const end = new Date(today);
+      end.setDate(today.getDate() + 30);
+      
+      const targetBookings = bookings.filter(b => {
+          const storeMatch = adminSel.store === 'all' || String(b.storeId) === String(adminSel.store);
+          if(!storeMatch) return false;
+          const bDate = new Date(b.date);
+          return bDate >= today && bDate <= end;
+      });
+
+      const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '金額'];
+      const rows = targetBookings.map(b => [
+        b.date, b.time, b.storeName, b.name, b.phone, b.email, b.itemTitle, b.addonName, b.totalAmount
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bookings_next30days_${adminSel.store}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+  };
+
   const submitItem = async (e) => {
     e.preventDefault(); setStatus(p => ({ ...p, uploading: true }));
     try {
@@ -295,6 +329,10 @@ export default function App() {
 
   const adminBookings = useMemo(() => bookings.filter(b => (adminSel.store === 'all' || String(b.storeId) === String(adminSel.store)) && (!adminSel.date || b.date === adminSel.date)).sort((a,b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`)), [bookings, adminSel]);
 
+  // 驗證邏輯
+  const isPhoneInvalid = bookData.phone.length > 0 && bookData.phone.length !== 10;
+  const isEmailInvalid = bookData.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bookData.email);
+
   const renderContent = () => {
     if (step === 'form') return (
       <div className="max-w-2xl mx-auto px-6">
@@ -304,34 +342,45 @@ export default function App() {
            <div className="flex-1">
                <p className="text-xs text-[#C29591] font-bold">預約項目</p>
                <p className="font-medium">{selItem?.title} {selAddon && `+ ${selAddon.name}`}</p>
-               {/* 修正 4: 預計總時長 */}
                <p className="text-xs text-gray-400">預計總時長: <span className="font-bold text-[#463E3E]">{getDuration()}</span> 分鐘</p>
            </div>
            <div className="text-right">
-               {/* 修正 5: 總金額 (含加購) */}
                <p className="text-xs text-gray-400 tracking-widest uppercase">總金額 (含加購)</p>
                <p className="text-lg font-bold">NT$ {getAmount().toLocaleString()}</p>
            </div>
         </div>
         <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
           <div className="border-b pb-6">
-            {/* 修正 6: 選擇預約門市 */}
             <label className="text-xs font-bold text-gray-400 mb-2 block">選擇預約門市</label>
             <div className="flex flex-wrap gap-3">{settings.stores.map(s => <button key={s.id} onClick={() => setBookData(p => ({ ...p, storeId: s.id, date: '', time: '' }))} className={`px-4 py-2 text-xs border rounded-full ${String(bookData.storeId) === String(s.id) ? 'bg-[#463E3E] text-white' : 'hover:border-[#C29591]'}`}>{s.name}</button>)}</div>
           </div>
           <div className="grid md:grid-cols-2 gap-6">
-            {/* 修正 7: 還原紅字提醒樣式與 relative 定位 */}
             <div className="relative">
                 <input type="text" placeholder="顧客姓名 (必填，不可含數字)" className={`w-full border-b py-2 outline-none ${/\d/.test(bookData.name) ? 'border-red-300 text-red-500' : ''}`} value={bookData.name} onChange={e => setBookData(p=>({...p, name: e.target.value}))} />
                 {/\d/.test(bookData.name) && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">姓名不可包含數字</span>}
             </div>
-            <input type="tel" placeholder="聯絡電話 (10碼)" className="border-b py-2 outline-none" value={bookData.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ''); if(v.length<=10) setBookData(p=>({...p, phone:v})); }} />
-            <input type="email" placeholder="電子信箱" className="border-b py-2 outline-none" value={bookData.email} onChange={e => setBookData(p=>({...p, email: e.target.value}))} />
+            
+            {/* 修正 8, 10: 電話長度檢查 + 紅字提醒 + 必填標示 */}
+            <div className="relative">
+                <input type="tel" placeholder="聯絡電話 (必填10碼)" className={`w-full border-b py-2 outline-none ${isPhoneInvalid ? 'border-red-300 text-red-500' : ''}`} value={bookData.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ''); if(v.length<=10) setBookData(p=>({...p, phone:v})); }} />
+                {isPhoneInvalid && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">電話需為10碼數字</span>}
+            </div>
+
+            {/* 修正 9, 10: 信箱格式檢查 + 紅字提醒 + 必填標示 */}
+            <div className="relative">
+                <input type="email" placeholder="電子信箱 (必填)" className={`w-full border-b py-2 outline-none ${isEmailInvalid ? 'border-red-300 text-red-500' : ''}`} value={bookData.email} onChange={e => setBookData(p=>({...p, email: e.target.value}))} />
+                {isEmailInvalid && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">信箱格式錯誤</span>}
+            </div>
+            
             <div className="md:col-span-2 flex items-center gap-2 border-b py-2 text-gray-400 text-xs"><CreditCard size={16}/> 付款方式：<span className="text-[#463E3E]">門市付款</span></div>
           </div>
           <div className="flex justify-center pt-2"><CustomCalendar selectedDate={bookData.date} onDateSelect={d => setBookData(p=>({...p, date: d, time: ''}))} settings={settings} selectedStoreId={bookData.storeId} isDayFull={d => TIME_SLOTS.every(t => isTimeFull(d, t))} /></div>
           {bookData.date && bookData.storeId && <div className="grid grid-cols-4 md:grid-cols-6 gap-2">{TIME_SLOTS.map(t => <button key={t} disabled={isTimeFull(bookData.date, t)} onClick={() => setBookData(p=>({...p, time: t}))} className={`py-2 text-[10px] border ${bookData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white disabled:opacity-20'}`}>{t}</button>)}</div>}
-          <button disabled={status.submitting || !bookData.storeId || /\d/.test(bookData.name) || !bookData.name || bookData.phone.length!==10 || !bookData.email || !bookData.time} onClick={confirmBooking} className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50">{status.submitting ? '處理中...' : '確認送出預約'}</button>
+          
+          {/* 修正 11: 門市提醒優先顯示 */}
+          <button disabled={status.submitting || !bookData.storeId || /\d/.test(bookData.name) || !bookData.name || bookData.phone.length!==10 || isEmailInvalid || !bookData.email || !bookData.time} onClick={confirmBooking} className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50">
+            {status.submitting ? '處理中...' : !bookData.storeId ? '請先選擇門市' : '確認送出預約'}
+          </button>
         </div>
       </div>
     );
@@ -340,24 +389,46 @@ export default function App() {
       <div className="max-w-lg mx-auto px-6 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#FAF9F6] mb-4"><CheckCircle size={32} className="text-[#C29591]" /></div>
         <h2 className="text-xl font-light tracking-[0.3em] text-[#463E3E] uppercase">Reservation Confirmed</h2>
-        {/* 修正 1: 預約成功副標題 */}
         <p className="text-[10px] text-gray-400 mt-2 tracking-widest mb-10">您的預約已成功送出，期待與您相見</p>
         
         <div className="bg-white border border-[#EAE7E2] shadow-lg overflow-hidden relative text-left">
           <div className="h-1 bg-[#C29591]"></div>
-          {selItem?.images?.[0] && <div className="w-full h-56 relative"><img src={selItem.images[0]} className="w-full h-full object-cover" alt="" /><div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 to-transparent flex items-end p-6 text-white"><h3>{selItem.title}</h3></div></div>}
+          {/* 修正 1: 商品圖示分類顯示 */}
+          {selItem?.images?.[0] && <div className="w-full h-56 relative group">
+              <img src={selItem.images[0]} className="w-full h-full object-cover" alt="" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 via-transparent to-transparent flex items-end p-6">
+                <div className="text-white">
+                    <p className="text-[10px] tracking-[0.2em] opacity-80 uppercase mb-1">{selItem.category}</p>
+                    <h3 className="text-lg font-medium tracking-wide">{selItem.title}</h3>
+                </div>
+              </div>
+          </div>}
+          
           <div className="p-8 space-y-4 text-xs tracking-wide">
-            <div className="bg-[#FAF9F6] border p-4 text-center mb-8">
-                {/* 修正 2: 預約時間標題 */}
+            <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
                 <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
-                <span className="text-lg font-bold">{bookData.date} • {bookData.time}</span>
-                <div className="text-[#C29591]">{settings.stores.find(s=>s.id===bookData.storeId)?.name}</div>
+                <div className="flex justify-center items-baseline gap-2 text-[#463E3E]">
+                    <span className="text-lg font-bold tracking-widest">{bookData.date}</span>
+                    <span className="text-[#C29591]">•</span>
+                    <span className="text-xl font-bold tracking-widest">{bookData.time}</span>
+                </div>
+                <div className="mt-2 text-xs font-bold text-[#C29591]">{settings.stores.find(s=>s.id===bookData.storeId)?.name}</div>
             </div>
+            
+            {/* 修正 2: 分類線條 border-gray-100 */}
             {[
               ['顧客姓名', bookData.name], ['聯絡電話', bookData.phone], ['電子信箱', bookData.email],
               ['加購項目', selAddon?.name || '無'], ['總時長', `${getDuration()} 分鐘`], ['付款方式', bookData.paymentMethod]
-            ].map(([l, v]) => <div key={l} className="flex justify-between border-b border-dashed pb-2"><span className="text-gray-400">{l}</span><span className="font-medium">{v}</span></div>)}
-            <div className="pt-6 border-t flex justify-between items-end"><span className="text-[10px] font-bold text-gray-400">Total</span><span className="text-2xl font-bold text-[#C29591]">NT$ {getAmount().toLocaleString()}</span></div>
+            ].map(([l, v]) => <div key={l} className="flex justify-between border-b border-dashed border-gray-100 pb-2"><span className="text-gray-400">{l}</span><span className="font-medium text-[#463E3E]">{v}</span></div>)}
+            
+            <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
+                <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
+                <div className="text-2xl font-bold text-[#C29591] leading-none">
+                    {/* 修正 3: NT$ 顯示 */}
+                    <span className="text-xs mr-1 text-gray-400 font-normal align-top mt-1 inline-block">NT$</span>
+                    {getAmount().toLocaleString()}
+                </div>
+            </div>
           </div>
         </div>
         <button onClick={() => { setStep('none'); setTab('catalog'); }} className="w-full mt-8 bg-[#463E3E] text-white py-4 text-xs tracking-[0.2em] uppercase">回到首頁</button>
@@ -371,13 +442,14 @@ export default function App() {
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {['全部', ...settings.styleCategories].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white' : 'hover:border-[#C29591]'}`}>{c}</button>)}
+                  {/* 修正 7: 未選取按鈕為白底 bg-white text-gray-500 */}
+                  {['全部', ...settings.styleCategories].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {CONSTANTS.PRICES.map(p => <button key={p} onClick={() => setFilters(p=>({...p, price:p}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.price===p ? 'bg-[#463E3E] text-white' : 'hover:border-[#C29591]'}`}>{p}</button>)}
+                  {CONSTANTS.PRICES.map(p => <button key={p} onClick={() => setFilters(p=>({...p, price:p}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.price===p ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{p}</button>)}
               </div>
             </div>
             {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
@@ -401,7 +473,6 @@ export default function App() {
           <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-12">預約查詢</h2>
           <div className="bg-white p-8 border mb-12 flex flex-col gap-4">
             <input type="text" placeholder="輸入預約姓名 或 手機號碼" className="border-b py-3 px-2 outline-none text-xs" value={search.key} onChange={e => setSearch(p=>({...p, key: e.target.value}))} />
-            {/* 修正 3: 按鈕文字更改為「查詢預約」 */}
             <button onClick={() => { const k = search.key.trim(); const r = bookings.filter(b => b.name === k || b.phone === k).sort((a,b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`)); setSearch(p=>({...p, res: r.length ? r : []})); if(!r.length) alert('查無資料'); }} className="bg-[#463E3E] text-white py-3 text-xs tracking-widest flex justify-center gap-2"><Search size={14}/> 查詢預約</button>
           </div>
           <div className="space-y-6 pb-24">
@@ -501,13 +572,15 @@ export default function App() {
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-3 border"><select className="text-xs border p-2" value={inputs.holiday.storeId} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,storeId:e.target.value}}))}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 p-2 border text-xs" value={inputs.holiday.date} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,date:e.target.value}}))}/><button onClick={()=>{if(inputs.holiday.date) saveSettings({...settings, holidays:[...settings.holidays, inputs.holiday]})}} className="bg-[#463E3E] text-white px-4 py-2 text-[10px]">新增</button></div><div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex gap-2">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name}) <X size={12} className="cursor-pointer" onClick={()=>saveSettings({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
                 </div>
               </div>}
-              {mgrTab === 'bookings' && <div className="space-y-6 h-full flex flex-col">
+              
+              {/* 修正 4: 列表顯示失效 */}
+              {mgrTab === 'bookings' && <div className="h-full flex flex-col space-y-4">
                 <div className="flex justify-between border-b pb-4">
                     <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">預約訂單管理</h4><p className="text-[10px] text-gray-400 mt-1">查看與管理所有顧客預約</p></div>
-                    <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded"><Filter size={14}/><select className="text-xs bg-transparent" value={adminSel.store} onChange={e=>setAdminSel(p=>({...p, store:e.target.value}))}><option value="all">全店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><div className="w-[1px] h-6 bg-gray-300 mx-1"></div><button onClick={()=>setViewMode('list')} className={`p-2 ${viewMode==='list'?'bg-white shadow text-[#C29591]':''}`}><ListIcon size={16}/></button><button onClick={()=>{setViewMode('calendar');setAdminSel(p=>({...p, date:getTodayStr()}))}} className={`p-2 ${viewMode==='calendar'?'bg-white shadow text-[#C29591]':''}`}><Grid size={16}/></button><button onClick={()=>{const csv = ['日期,時間,門市,姓名,電話,項目,加購,金額'].join(',') + '\n' + adminBookings.map(b=>[b.date,b.time,b.storeName,b.name,b.phone,b.itemTitle,b.addonName,b.totalAmount].join(',')).join('\n'); const l = document.createElement('a'); l.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'})); l.download=`bookings.csv`; l.click();}} className="p-2"><Download size={16}/></button></div>
+                    <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded"><Filter size={14}/><select className="text-xs bg-transparent" value={adminSel.store} onChange={e=>setAdminSel(p=>({...p, store:e.target.value}))}><option value="all">全店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><div className="w-[1px] h-6 bg-gray-300 mx-1"></div><button onClick={()=>setViewMode('list')} className={`p-2 ${viewMode==='list'?'bg-white shadow text-[#C29591]':''}`}><ListIcon size={16}/></button><button onClick={()=>{setViewMode('calendar');setAdminSel(p=>({...p, date:getTodayStr()}))}} className={`p-2 ${viewMode==='calendar'?'bg-white shadow text-[#C29591]':''}`}><Grid size={16}/></button><button onClick={handleExportCSV} className="p-2"><Download size={16}/></button></div>
                 </div>
-                {viewMode === 'list' ? <div className="space-y-3 overflow-y-auto pr-2 flex-1">{adminBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><button onClick={()=>confirm('取消？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','bookings',b.id))}><Trash2 size={16}/></button></div>)}</div> : 
-                <div className="flex flex-col md:flex-row gap-8 h-full"><AdminCalendar bookings={adminBookings} selectedDate={adminSel.date} onDateSelect={d=>setAdminSel(p=>({...p, date:d}))}/><div className="flex-1 overflow-y-auto space-y-3">{adminBookings.map(b=><div key={b.id} className="border p-4 bg-white shadow-sm text-xs relative pl-6"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between"><span className="font-bold text-lg">{b.time}</span><button onClick={()=>confirm('取消？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','bookings',b.id))}><Trash2 size={14}/></button></div><div className="font-bold">{b.name}</div><div className="text-gray-400">{b.phone}</div><div className="mt-2 pt-2 border-t flex justify-between"><span>{b.itemTitle}</span><span className="text-[#C29591] font-bold">NT${b.totalAmount}</span></div></div>)}</div></div>}
+                {viewMode === 'list' ? <div className="flex-1 overflow-y-auto pr-2 space-y-3">{adminBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><button onClick={()=>confirm('取消？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','bookings',b.id))}><Trash2 size={16}/></button></div>)}</div> : 
+                <div className="flex flex-col md:flex-row gap-8 h-full"><AdminBookingCalendar bookings={adminBookings} selectedDate={adminSel.date} onDateSelect={d=>setAdminSel(p=>({...p, date:d}))}/><div className="flex-1 overflow-y-auto space-y-3">{adminBookings.map(b=><div key={b.id} className="border p-4 bg-white shadow-sm text-xs relative pl-6"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between"><span className="font-bold text-lg">{b.time}</span><button onClick={()=>confirm('取消？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','bookings',b.id))}><Trash2 size={14}/></button></div><div className="font-bold">{b.name}</div><div className="text-gray-400">{b.phone}</div><div className="mt-2 pt-2 border-t flex justify-between"><span>{b.itemTitle}</span><span className="text-[#C29591] font-bold">NT${b.totalAmount}</span></div></div>)}</div></div>}
               </div>}
             </div>
           </div>
