@@ -190,6 +190,43 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 };
 
 export default function App() {
+  // --- 禁止縮放的核心邏輯 (Start) ---
+  useEffect(() => {
+    // 1. 強制設定 Meta Viewport
+    const metaTagId = 'viewport-meta-no-zoom';
+    let meta = document.getElementById(metaTagId);
+    if (!meta) {
+      meta = document.querySelector('meta[name="viewport"]');
+    }
+    
+    // 設定 content 禁止 user-scalable
+    const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+    
+    if (meta) {
+      meta.content = content;
+    } else {
+      const newMeta = document.createElement('meta');
+      newMeta.name = 'viewport';
+      newMeta.id = metaTagId;
+      newMeta.content = content;
+      document.head.appendChild(newMeta);
+    }
+
+    // 2. 阻擋 iOS Safari 雙指縮放手勢 (Gesture Start)
+    const preventGestureZoom = (e) => {
+      e.preventDefault();
+    };
+    document.addEventListener('gesturestart', preventGestureZoom);
+
+    // 3. (Optional) 阻擋雙擊縮放 - 雖然 CSS touch-action 已經處理，但 JS 可做雙重保險
+    // 這裡我們主要依賴下方的 CSS touch-action: manipulation
+
+    return () => {
+      document.removeEventListener('gesturestart', preventGestureZoom);
+    };
+  }, []);
+  // --- 禁止縮放的核心邏輯 (End) ---
+
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState('catalog');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -197,14 +234,12 @@ export default function App() {
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
   
-  // 初始化時即使用 CONSTANTS.CATS，確保分類按鈕在載入前就顯示正確，不會閃爍
   const [settings, setSettings] = useState({ 
       stores: [], 
       staff: [], 
       holidays: [], 
       styleCategories: CONSTANTS.CATS, 
       savedTags: [],
-      // 新增黑名單預設
       blacklist: []
   });
   
@@ -221,9 +256,8 @@ export default function App() {
   const [status, setStatus] = useState({ submitting: false, adminOpen: false, uploadOpen: false, mgrOpen: false, uploading: false });
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
-  // 新增: 搜尋與排序狀態
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [sortOption, setSortOption] = useState('latest'); // 'latest' | 'popular'
+  const [sortOption, setSortOption] = useState('latest');
 
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
@@ -299,7 +333,6 @@ export default function App() {
   };
 
   const confirmBooking = async () => {
-    // 新增: 黑名單檢查
     if ((settings.blacklist || []).includes(bookData.phone)) {
         alert("此號碼無法進行預約，請聯繫客服。");
         return;
@@ -363,9 +396,7 @@ export default function App() {
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
 
-  // 修正: 搜尋與排序邏輯
   const processedItems = useMemo(() => {
-    // 1. 基礎篩選 (分類、價格、標籤)
     let res = items.filter(i => {
         const p = Number(i.price);
         const styleMatch = filters.style === '全部' || i.category === filters.style;
@@ -377,22 +408,18 @@ export default function App() {
         return styleMatch && priceMatch && tagMatch;
     });
 
-    // 2. 關鍵字搜尋 (標題或標籤)
     if(catalogSearch) {
         const lowerKey = catalogSearch.toLowerCase();
         res = res.filter(i => i.title.toLowerCase().includes(lowerKey) || i.tags?.some(t => t.toLowerCase().includes(lowerKey)));
     }
 
-    // 3. 排序 (最新 vs 熱門)
     if (sortOption === 'popular') {
-        // 計算熱門度: 統計訂單中 itemTitle 出現次數
         const popularityMap = bookings.reduce((acc, b) => {
             if(b.itemTitle) acc[b.itemTitle] = (acc[b.itemTitle] || 0) + 1;
             return acc;
         }, {});
         res.sort((a, b) => (popularityMap[b.title] || 0) - (popularityMap[a.title] || 0));
     } else {
-        // 預設: 最新 (依照 createdAt 降序，若無則依 ID 或 price)
         res.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     }
 
@@ -515,7 +542,6 @@ export default function App() {
       case 'catalog': return (
         <div className="max-w-7xl mx-auto px-6 space-y-8">
           <div className="flex flex-col gap-6 border-b pb-8 mb-8">
-            {/* 新增: 搜尋與排序工具列 */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center pb-4 border-b border-dashed border-gray-200">
                 <div className="flex items-center gap-2 w-full md:w-auto relative">
                     <Search size={14} className="absolute left-3 text-gray-400"/>
@@ -626,7 +652,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#5C5555] font-sans">
-      <style>{`::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#C29591;border-radius:3px}html{overflow-y:scroll}.hide-scrollbar::-webkit-scrollbar{display:none}`}</style>
+      <style>{`
+        ::-webkit-scrollbar{width:6px}
+        ::-webkit-scrollbar-thumb{background:#C29591;border-radius:3px}
+        html{overflow-y:scroll}
+        .hide-scrollbar::-webkit-scrollbar{display:none}
+        /* 禁止縮放與字體調整的核心 CSS */
+        html, body {
+            touch-action: manipulation;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+      `}</style>
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-[500] border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer mb-4 md:mb-0" onClick={() => {setTab('catalog'); setStep('none');}}>UNIWAWA</h1>
@@ -645,7 +682,6 @@ export default function App() {
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
-              {/* 新增: Blacklist Tab (Ban Icon) */}
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
@@ -692,7 +728,6 @@ export default function App() {
                 </div></div>}
               </div>}
 
-              {/* 新增: Blacklist Section */}
               {mgrTab === 'blacklist' && <div className="space-y-6">
                   <div className="border-l-4 border-[#C29591] pl-4">
                       <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">黑名單管理</h4>
