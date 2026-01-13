@@ -83,8 +83,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
            onTouchStart={e=>handleTouch(e,'s')} 
            onTouchMove={e=>handleTouch(e,'m')} 
            onTouchEnd={e=>handleTouch(e,'e')}
-           // 這裡設定 pan-y，保證可以上下滑動頁面，左右滑動則是切換圖片
-           style={{ touchAction: 'pan-y' }} 
+           // 使用 manipulation 以相容全域設定，但圖片本身需要響應水平滑動
       >
         <div className="flex w-full h-full transition-transform duration-500 ease-in-out" style={{ transform: `translateX(-${idx * 100}%)` }}>
           {imgs.map((src, i) => (<img key={i} src={src} className="w-full h-full object-cover flex-shrink-0" loading={i===0?"eager":"lazy"} decoding="async" alt="" />))}
@@ -197,9 +196,9 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 };
 
 export default function App() {
-  // --- 絕對禁止縮放 (Ultimate No Zoom) (Start) ---
+  // --- 核彈級防縮放 (Nuclear No Zoom) (Start) ---
   useEffect(() => {
-    // 1. Meta Tag 強化
+    // 1. Meta Tag
     const metaTagId = 'viewport-meta-no-zoom';
     let meta = document.getElementById(metaTagId);
     if (!meta) meta = document.querySelector('meta[name="viewport"]');
@@ -211,22 +210,23 @@ export default function App() {
       document.head.appendChild(newMeta);
     }
 
-    // 2. 暴力攔截: 防止多點觸控縮放 (Pinch to Zoom)
-    const preventMultiFingerTouch = (e) => {
-      // 只要螢幕上有 2 根以上手指，直接殺掉這個事件，不讓瀏覽器處理縮放
-      if (e.touches && e.touches.length > 1) {
+    // 2. 暴力攔截: 防止多點觸控 (Pinch) 與 Safari Scale
+    const preventZoom = (e) => {
+      // 只要觸控點超過 1 個，或者 Safari 報告 scale 不為 1 (正在縮放)，直接阻擋
+      if (e.touches.length > 1 || (e.scale && e.scale !== 1)) {
         e.preventDefault();
         e.stopPropagation();
       }
     };
 
-    // 3. 暴力攔截: 防止 iOS 手勢縮放 (Gesture Zoom)
+    // 3. 暴力攔截: iOS 手勢事件 (Gesture Events)
+    // 這是解決「下滑時雙指觸碰導致縮放」的關鍵
     const preventGesture = (e) => {
       e.preventDefault();
-      document.body.style.zoom = 0.99; // 重置 zoom 狀態
+      document.body.style.zoom = 0.99; // 奇技淫巧：強制重繪 zoom
     };
 
-    // 4. 防止雙擊縮放
+    // 4. 防止雙擊 (Double Tap)
     let lastTouchEnd = 0;
     const preventDoubleTap = (e) => {
       const now = (new Date()).getTime();
@@ -234,24 +234,28 @@ export default function App() {
       lastTouchEnd = now;
     };
 
-    // 綁定事件 (passive: false 是必須的，否則 preventDefault 會無效)
-    document.addEventListener('touchstart', preventMultiFingerTouch, { passive: false });
-    document.addEventListener('touchmove', preventMultiFingerTouch, { passive: false });
-    document.addEventListener('gesturestart', preventGesture);
-    document.addEventListener('gesturechange', preventGesture);
-    document.addEventListener('gestureend', preventGesture);
-    document.addEventListener('touchend', preventDoubleTap);
+    // 使用 { passive: false } 確保我們可以調用 preventDefault
+    // 監聽 window 層級，確保在事件冒泡的最頂層攔截
+    window.addEventListener('touchstart', preventZoom, { passive: false });
+    window.addEventListener('touchmove', preventZoom, { passive: false });
+    
+    // 針對 Safari 特有的 gesture 事件
+    window.addEventListener('gesturestart', preventGesture);
+    window.addEventListener('gesturechange', preventGesture);
+    window.addEventListener('gestureend', preventGesture);
+    
+    window.addEventListener('touchend', preventDoubleTap);
 
     return () => {
-      document.removeEventListener('touchstart', preventMultiFingerTouch);
-      document.removeEventListener('touchmove', preventMultiFingerTouch);
-      document.removeEventListener('gesturestart', preventGesture);
-      document.removeEventListener('gesturechange', preventGesture);
-      document.removeEventListener('gestureend', preventGesture);
-      document.removeEventListener('touchend', preventDoubleTap);
+      window.removeEventListener('touchstart', preventZoom);
+      window.removeEventListener('touchmove', preventZoom);
+      window.removeEventListener('gesturestart', preventGesture);
+      window.removeEventListener('gesturechange', preventGesture);
+      window.removeEventListener('gestureend', preventGesture);
+      window.removeEventListener('touchend', preventDoubleTap);
     };
   }, []);
-  // --- 絕對禁止縮放 (Ultimate No Zoom) (End) ---
+  // --- 核彈級防縮放 (Nuclear No Zoom) (End) ---
 
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState('catalog');
@@ -684,13 +688,16 @@ export default function App() {
         html{overflow-y:scroll}
         .hide-scrollbar::-webkit-scrollbar{display:none}
         
-        /* 終極防縮放 CSS 設定：
-          1. touch-action: pan-y -> 全局只允許垂直滑動，這樣可以鎖定大部分的縮放手勢
-          2. overscroll-behavior: none -> 關閉橡皮筋效果
+        /* 全域鎖定：manipulation 
+           這告訴瀏覽器：這個網站沒有雙擊縮放，沒有 Pinch 縮放，只有滑動。
+           比起 pan-y，manipulation 在某些現代瀏覽器上對水平滑動的相容性更好。
         */
+        * {
+            touch-action: manipulation;
+        }
+
         html, body {
-            touch-action: pan-y;
-            overscroll-behavior: none;
+            overscroll-behavior: none; /* 禁止橡皮筋特效，這常是誤觸發縮放的原因 */
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
         }
@@ -714,14 +721,13 @@ export default function App() {
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
             
             {/* 這裡是最重要的修正：後台頁籤 (水平滑動) 
-                我們加上 touchAction: 'pan-x'，這樣即使全局鎖定了垂直滑動，這裡依然可以左右滑 */}
-            <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
+                我們加上 touchAction: 'pan-x pan-y' (即 manipulation)，確保它可以左右滑 */}
+            <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x pan-y' }}>
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
 
-            {/* 後台內容區域 (垂直滑動)
-                我們加上 touchAction: 'pan-y' 以防萬一，確保它可以正常上下滑 */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-12" style={{ touchAction: 'pan-y' }}>
+            {/* 後台內容區域 (垂直滑動) */}
+            <div className="flex-1 overflow-y-auto p-8 space-y-12" style={{ touchAction: 'pan-x pan-y' }}>
               {mgrTab === 'stores' && <div className="space-y-6">
                 <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4><p className="text-[10px] text-gray-400 mt-1">設定品牌旗下的所有分店</p></div>
                 <div className="flex gap-2"><input type="text" className="flex-1 border p-2 text-xs" placeholder="新門市名稱" value={inputs.store} onChange={e=>setInputs(p=>({...p, store:e.target.value}))} /><button onClick={()=>{if(!inputs.store)return; saveSettings({...settings, stores:[...settings.stores, {id:Date.now().toString(), name:inputs.store, cleaningTime:20}]}); setInputs(p=>({...p, store:''}))}} className="bg-[#463E3E] text-white px-4 text-xs">新增</button></div>
