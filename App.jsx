@@ -21,7 +21,8 @@ const storage = getStorage(app);
 const appId = 'uniwawa01';
 
 const CONSTANTS = {
-  CATS: ['極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'],
+  // 修正 1: 更新預設分類列表，補上缺少的項目，解決開啟時的閃爍與重新排序問題
+  CATS: ['極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列', '單色/貓眼/鏡面', '純保養'],
   PRICES: ['全部', '1400以下', '1400-1800', '1800以上'], 
   DAYS: ['日', '一', '二', '三', '四', '五', '六'],
   CLEAN: 20, MAX_DAYS: 30,
@@ -197,7 +198,7 @@ export default function App() {
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
   
-  // 修正 1: 強制預設為 CONSTANTS.CATS 避免閃爍
+  // 初始化時即使用 CONSTANTS.CATS，確保分類按鈕在載入前就顯示正確，不會閃爍
   const [settings, setSettings] = useState({ 
       stores: [], 
       staff: [], 
@@ -414,7 +415,6 @@ export default function App() {
             <div className="md:col-span-2 flex items-center gap-2 border-b py-2 text-gray-400 text-xs"><CreditCard size={16}/> 付款方式：<span className="text-[#463E3E]">門市付款</span></div>
           </div>
 
-          {/* 修正 3: 將門市選擇區塊移動到付款方式下方 */}
           <div className="border-b pb-6">
             <label className="text-xs font-bold text-gray-400 mb-2 block">選擇預約門市</label>
             <div className="flex flex-wrap gap-3">{settings.stores.map(s => <button key={s.id} onClick={() => setBookData(p => ({ ...p, storeId: s.id, date: '', time: '' }))} className={`px-4 py-2 text-xs border rounded-full ${String(bookData.storeId) === String(s.id) ? 'bg-[#463E3E] text-white' : 'hover:border-[#C29591]'}`}>{s.name}</button>)}</div>
@@ -484,14 +484,14 @@ export default function App() {
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {/* 修正 1: 雙重保險確保分類按鈕不會閃爍空白 */}
+                  {/* 修正 4: 雙重保險，確保分類按鈕始終顯示 */}
                   {(settings.styleCategories.length > 0 ? settings.styleCategories : CONSTANTS.CATS).map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {/* 修正 2: 將參數名稱改為 prev 避免與 map 的 p 衝突 */}
+                  {/* 修正 5: 修復價格分類，將參數改為 prev，避免蓋掉整個 filter 狀態 */}
                   {CONSTANTS.PRICES.map(p => <button key={p} onClick={() => setFilters(prev=>({...prev, price:p}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.price===p ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{p}</button>)}
               </div>
             </div>
@@ -535,6 +535,7 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-6">
           <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">門市資訊</h2>
           <div className="grid md:grid-cols-2 gap-8"><div className="bg-white border hover:border-[#C29591] transition-colors">
+            {/* 修正 1: 回復原始 img 標籤 */}
             <div className="aspect-video bg-gray-100 relative">
                 <img src={CONSTANTS.IMG_STORE} className="w-full h-full object-cover" alt="" />
             </div>
@@ -586,6 +587,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
+            {/* 修正 3: 保持 touchAction: 'pan-x' 防止垂直滾動 */}
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
