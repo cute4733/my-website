@@ -62,7 +62,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
 
   const move = (dir) => setIdx((p) => (p + dir + imgs.length) % imgs.length);
   const handleTouch = (e, type) => {
-    // 這裡只處理單指滑動圖片
     if (type === 's') { te.current = null; ts.current = e.targetTouches[0].clientX; }
     if (type === 'm') te.current = e.targetTouches[0].clientX;
     if (type === 'e' && ts.current && te.current) {
@@ -79,12 +78,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
           <button onClick={(e) => { e.stopPropagation(); confirm('確定刪除？') && onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-gray-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
         </div>
       )}
-      <div className="aspect-[3/4] overflow-hidden relative bg-gray-50" 
-           onTouchStart={e=>handleTouch(e,'s')} 
-           onTouchMove={e=>handleTouch(e,'m')} 
-           onTouchEnd={e=>handleTouch(e,'e')}
-           // 使用 manipulation 以相容全域設定，但圖片本身需要響應水平滑動
-      >
+      <div className="aspect-[3/4] overflow-hidden relative bg-gray-50" onTouchStart={e=>handleTouch(e,'s')} onTouchMove={e=>handleTouch(e,'m')} onTouchEnd={e=>handleTouch(e,'e')}>
         <div className="flex w-full h-full transition-transform duration-500 ease-in-out" style={{ transform: `translateX(-${idx * 100}%)` }}>
           {imgs.map((src, i) => (<img key={i} src={src} className="w-full h-full object-cover flex-shrink-0" loading={i===0?"eager":"lazy"} decoding="async" alt="" />))}
         </div>
@@ -196,66 +190,42 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 };
 
 export default function App() {
-  // --- 核彈級防縮放 (Nuclear No Zoom) (Start) ---
+  // --- 禁止縮放的核心邏輯 (Start) ---
   useEffect(() => {
-    // 1. Meta Tag
+    // 1. 強制設定 Meta Viewport
     const metaTagId = 'viewport-meta-no-zoom';
     let meta = document.getElementById(metaTagId);
-    if (!meta) meta = document.querySelector('meta[name="viewport"]');
-    const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimum-scale=1.0, viewport-fit=cover';
-    if (meta) { meta.content = content; } 
-    else {
+    if (!meta) {
+      meta = document.querySelector('meta[name="viewport"]');
+    }
+    
+    // 設定 content 禁止 user-scalable
+    const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+    
+    if (meta) {
+      meta.content = content;
+    } else {
       const newMeta = document.createElement('meta');
-      newMeta.name = 'viewport'; newMeta.id = metaTagId; newMeta.content = content;
+      newMeta.name = 'viewport';
+      newMeta.id = metaTagId;
+      newMeta.content = content;
       document.head.appendChild(newMeta);
     }
 
-    // 2. 暴力攔截: 防止多點觸控 (Pinch) 與 Safari Scale
-    const preventZoom = (e) => {
-      // 只要觸控點超過 1 個，或者 Safari 報告 scale 不為 1 (正在縮放)，直接阻擋
-      if (e.touches.length > 1 || (e.scale && e.scale !== 1)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-
-    // 3. 暴力攔截: iOS 手勢事件 (Gesture Events)
-    // 這是解決「下滑時雙指觸碰導致縮放」的關鍵
-    const preventGesture = (e) => {
+    // 2. 阻擋 iOS Safari 雙指縮放手勢 (Gesture Start)
+    const preventGestureZoom = (e) => {
       e.preventDefault();
-      document.body.style.zoom = 0.99; // 奇技淫巧：強制重繪 zoom
     };
+    document.addEventListener('gesturestart', preventGestureZoom);
 
-    // 4. 防止雙擊 (Double Tap)
-    let lastTouchEnd = 0;
-    const preventDoubleTap = (e) => {
-      const now = (new Date()).getTime();
-      if (now - lastTouchEnd <= 300) { e.preventDefault(); }
-      lastTouchEnd = now;
-    };
-
-    // 使用 { passive: false } 確保我們可以調用 preventDefault
-    // 監聽 window 層級，確保在事件冒泡的最頂層攔截
-    window.addEventListener('touchstart', preventZoom, { passive: false });
-    window.addEventListener('touchmove', preventZoom, { passive: false });
-    
-    // 針對 Safari 特有的 gesture 事件
-    window.addEventListener('gesturestart', preventGesture);
-    window.addEventListener('gesturechange', preventGesture);
-    window.addEventListener('gestureend', preventGesture);
-    
-    window.addEventListener('touchend', preventDoubleTap);
+    // 3. (Optional) 阻擋雙擊縮放 - 雖然 CSS touch-action 已經處理，但 JS 可做雙重保險
+    // 這裡我們主要依賴下方的 CSS touch-action: manipulation
 
     return () => {
-      window.removeEventListener('touchstart', preventZoom);
-      window.removeEventListener('touchmove', preventZoom);
-      window.removeEventListener('gesturestart', preventGesture);
-      window.removeEventListener('gesturechange', preventGesture);
-      window.removeEventListener('gestureend', preventGesture);
-      window.removeEventListener('touchend', preventDoubleTap);
+      document.removeEventListener('gesturestart', preventGestureZoom);
     };
   }, []);
-  // --- 核彈級防縮放 (Nuclear No Zoom) (End) ---
+  // --- 禁止縮放的核心邏輯 (End) ---
 
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState('catalog');
@@ -687,17 +657,9 @@ export default function App() {
         ::-webkit-scrollbar-thumb{background:#C29591;border-radius:3px}
         html{overflow-y:scroll}
         .hide-scrollbar::-webkit-scrollbar{display:none}
-        
-        /* 全域鎖定：manipulation 
-           這告訴瀏覽器：這個網站沒有雙擊縮放，沒有 Pinch 縮放，只有滑動。
-           比起 pan-y，manipulation 在某些現代瀏覽器上對水平滑動的相容性更好。
-        */
-        * {
-            touch-action: manipulation;
-        }
-
+        /* 禁止縮放與字體調整的核心 CSS */
         html, body {
-            overscroll-behavior: none; /* 禁止橡皮筋特效，這常是誤觸發縮放的原因 */
+            touch-action: manipulation;
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
         }
@@ -719,15 +681,10 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
-            
-            {/* 這裡是最重要的修正：後台頁籤 (水平滑動) 
-                我們加上 touchAction: 'pan-x pan-y' (即 manipulation)，確保它可以左右滑 */}
-            <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x pan-y' }}>
+            <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
-
-            {/* 後台內容區域 (垂直滑動) */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-12" style={{ touchAction: 'pan-x pan-y' }}>
+            <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {mgrTab === 'stores' && <div className="space-y-6">
                 <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4><p className="text-[10px] text-gray-400 mt-1">設定品牌旗下的所有分店</p></div>
                 <div className="flex gap-2"><input type="text" className="flex-1 border p-2 text-xs" placeholder="新門市名稱" value={inputs.store} onChange={e=>setInputs(p=>({...p, store:e.target.value}))} /><button onClick={()=>{if(!inputs.store)return; saveSettings({...settings, stores:[...settings.stores, {id:Date.now().toString(), name:inputs.store, cleaningTime:20}]}); setInputs(p=>({...p, store:''}))}} className="bg-[#463E3E] text-white px-4 text-xs">新增</button></div>
