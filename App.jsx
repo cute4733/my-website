@@ -22,7 +22,8 @@ const appId = 'uniwawa01';
 
 const CONSTANTS = {
   CATS: ['極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'],
-  PRICES: ['全部', '1300以下', '1300-1900', '1900以上'], 
+  // 修正 6: 更新價位分類
+  PRICES: ['全部', '1400以下', '1400-1800', '1800以上'], 
   DAYS: ['日', '一', '二', '三', '四', '五', '六'],
   CLEAN: 20, MAX_DAYS: 30,
   IMG_WAWA: "https://drive.google.com/thumbnail?id=19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78&sz=w1000",
@@ -196,7 +197,15 @@ export default function App() {
   const [items, setItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [settings, setSettings] = useState({ stores: [], staff: [], holidays: [], styleCategories: CONSTANTS.CATS, savedTags: [] });
+  
+  // 修正 4: 初始化 settings 時直接帶入預設值，避免閃爍
+  const [settings, setSettings] = useState({ 
+      stores: [], 
+      staff: [], 
+      holidays: [], 
+      styleCategories: CONSTANTS.CATS, 
+      savedTags: [] 
+  });
   
   const [inputs, setInputs] = useState({ holiday: { date: '', storeId: 'all' }, store: '', category: '', tag: '', addon: { name: '', price: '', duration: '' }, pwd: '' });
   const [mgrTab, setMgrTab] = useState('stores');
@@ -214,9 +223,6 @@ export default function App() {
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
   const [search, setSearch] = useState({ key: '', res: [] });
-  
-  // 修正 1: 門市圖片載入狀態
-  const [isStoreImgLoaded, setIsStoreImgLoaded] = useState(false);
 
   useEffect(() => { signInAnonymously(auth); onAuthStateChanged(auth, setUser); }, []);
   useEffect(() => {
@@ -347,10 +353,19 @@ export default function App() {
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
 
-  // 修正 5: 強制轉型為 Number 以修復價格篩選
-  const filteredItems = useMemo(() => items.filter(i => (filters.style === '全部' || i.category === filters.style) && 
-    (filters.price === '全部' || (filters.price === '1300以下' && Number(i.price) < 1300) || (filters.price === '1300-1900' && Number(i.price) >= 1300 && Number(i.price) <= 1900) || (filters.price === '1900以上' && Number(i.price) > 1900)) &&
-    (!filters.tag || i.tags?.includes(filters.tag))), [items, filters]);
+  // 修正 5: 配合修正 6 更新價位區間判斷
+  const filteredItems = useMemo(() => items.filter(i => {
+    const p = Number(i.price);
+    const styleMatch = filters.style === '全部' || i.category === filters.style;
+    
+    let priceMatch = true;
+    if (filters.price === '1400以下') priceMatch = p < 1400;
+    else if (filters.price === '1400-1800') priceMatch = p >= 1400 && p <= 1800;
+    else if (filters.price === '1800以上') priceMatch = p > 1800;
+
+    const tagMatch = !filters.tag || i.tags?.includes(filters.tag);
+    return styleMatch && priceMatch && tagMatch;
+  }), [items, filters]);
 
   const storeBookings = useMemo(() => bookings.filter(b => adminSel.store === 'all' || String(b.storeId) === String(adminSel.store)), [bookings, adminSel.store]);
 
@@ -469,8 +484,8 @@ export default function App() {
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {/* 修正 4: 確保分類按鈕始終顯示，避免閃爍 */}
-                  {['全部', ...(settings.styleCategories || CONSTANTS.CATS)].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
+                  {/* 修正 4: 直接顯示 settings.styleCategories，若為空則先顯示 CONSTANTS.CATS 避免閃爍 */}
+                  {(settings.styleCategories.length > 0 ? settings.styleCategories : CONSTANTS.CATS).map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
@@ -519,14 +534,9 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-6">
           <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">門市資訊</h2>
           <div className="grid md:grid-cols-2 gap-8"><div className="bg-white border hover:border-[#C29591] transition-colors">
-            {/* 修正 1: 圖片載入狀態與過渡效果 */}
+            {/* 修正 1: 回復原始 img 標籤 */}
             <div className="aspect-video bg-gray-100 relative">
-                <img 
-                    src={CONSTANTS.IMG_STORE} 
-                    className={`w-full h-full object-cover transition-opacity duration-700 ${isStoreImgLoaded ? 'opacity-100' : 'opacity-0'}`} 
-                    alt="" 
-                    onLoad={() => setIsStoreImgLoaded(true)}
-                />
+                <img src={CONSTANTS.IMG_STORE} className="w-full h-full object-cover" alt="" />
             </div>
             <div className="p-8"><h3 className="text-lg font-medium tracking-widest mb-2">桃園文中店</h3><div className="w-8 h-[1px] bg-[#C29591] mb-6"></div><div className="flex gap-3 text-xs text-gray-500 mb-6"><MapPin size={16} className="text-[#C29591]" /> 桃園區文中三路 67 號 1 樓</div><button onClick={() => window.open('https://maps.app.goo.gl/B5ekaXi85mrWtXBJ6', '_blank')} className="w-full border py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white">GOOGLE MAPS</button></div></div></div>
         </div>
@@ -564,7 +574,6 @@ export default function App() {
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer mb-4 md:mb-0" onClick={() => {setTab('catalog'); setStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center overflow-x-auto no-scrollbar justify-center">
             {['about:關於', 'catalog:款式', 'notice:須知', 'store:門市', 'search:查詢', 'contact:聯絡'].map(t => { const [k,v]=t.split(':'); return <button key={k} onClick={() => {setTab(k); setStep('none'); if(k==='search') setSearch({key:'',res:[]});}} className={`flex-shrink-0 ${tab===k?'text-[#C29591]':''}`}>{v}</button>; })}
-            {/* 修正 1: 移除了 hover:scale-110 與其他外框代碼，避免位移與橫線 */}
             {isLoggedIn ? <div className="flex gap-4 border-l pl-4 flex-shrink-0"><button onClick={() => handleOpenUpload()} className="text-[#C29591] hover:scale-110"><Plus size={18}/></button><button onClick={() => setStatus(p=>({...p, mgrOpen:true}))} className="text-[#C29591]"><Settings size={18}/></button></div> : <button onClick={() => setStatus(p=>({...p, adminOpen:true}))} className="text-gray-300 hover:text-[#C29591] flex-shrink-0"><Lock size={14}/></button>}
           </div>
         </div>
@@ -577,7 +586,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
-            {/* 修正 3: 新增 touchAction: 'pan-x' 防止垂直滾動 */}
+            {/* 修正 3: 保持 touchAction: 'pan-x' 防止垂直滾動 */}
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
