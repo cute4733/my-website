@@ -29,8 +29,6 @@ const CONSTANTS = {
   IMG_STORE: "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000"
 };
 
-const ITEMS_PER_PAGE = 25; // 每頁顯示數量
-
 const NOTICE_ITEMS = [
   { title: "網站預約制", content: "本店採全預約制，請依系統開放的時段與服務項目進行預約，恕不接受臨時客。" },
   { title: "款式說明", content: "服務款式以網站上提供內容為主，暫不提供帶圖或客製設計服務。" },
@@ -192,15 +190,18 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 };
 
 export default function App() {
-  // --- 禁止縮放的核心邏輯 (Updated) ---
+  // --- 禁止縮放的核心邏輯 (Start) ---
   useEffect(() => {
-    // 1. 強制設定 Meta Viewport (防止頁面初始化縮放)
+    // 1. 強制設定 Meta Viewport
     const metaTagId = 'viewport-meta-no-zoom';
     let meta = document.getElementById(metaTagId);
     if (!meta) {
       meta = document.querySelector('meta[name="viewport"]');
     }
+    
+    // 設定 content 禁止 user-scalable
     const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+    
     if (meta) {
       meta.content = content;
     } else {
@@ -214,24 +215,14 @@ export default function App() {
     // 2. 阻擋 iOS Safari 雙指縮放手勢 (Gesture Start)
     const preventGestureZoom = (e) => {
       e.preventDefault();
-      document.body.style.zoom = 0.99; // Hack: 重置 zoom 狀態
     };
     document.addEventListener('gesturestart', preventGestureZoom);
 
-    // 3. 阻擋雙擊縮放 (Double Tap Zoom)
-    let lastTouchEnd = 0;
-    const preventDoubleTapZoom = (e) => {
-        const now = (new Date()).getTime();
-        if (now - lastTouchEnd <= 300) {
-            e.preventDefault();
-        }
-        lastTouchEnd = now;
-    };
-    document.addEventListener('touchend', preventDoubleTapZoom, { passive: false });
+    // 3. (Optional) 阻擋雙擊縮放 - 雖然 CSS touch-action 已經處理，但 JS 可做雙重保險
+    // 這裡我們主要依賴下方的 CSS touch-action: manipulation
 
     return () => {
       document.removeEventListener('gesturestart', preventGestureZoom);
-      document.removeEventListener('touchend', preventDoubleTapZoom);
     };
   }, []);
   // --- 禁止縮放的核心邏輯 (End) ---
@@ -242,7 +233,6 @@ export default function App() {
   const [items, setItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1); // 分頁狀態
   
   const [settings, setSettings] = useState({ 
       stores: [], 
@@ -282,11 +272,6 @@ export default function App() {
     const unsubBookings = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), orderBy('createdAt', 'desc')), s => setBookings(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => { unsubSettings(); unsubItems(); unsubAddons(); unsubBookings(); };
   }, [user]);
-
-  // 篩選條件改變時，重置頁碼
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filters, catalogSearch, sortOption]);
 
   useEffect(() => {
       if (mgrTab === 'bookings' && bookings.length > 0) {
@@ -554,84 +539,53 @@ export default function App() {
     );
 
     switch(tab) {
-      case 'catalog': {
-        // 分頁邏輯
-        const totalPages = Math.ceil(processedItems.length / ITEMS_PER_PAGE);
-        const currentItems = processedItems.slice(
-            (currentPage - 1) * ITEMS_PER_PAGE,
-            currentPage * ITEMS_PER_PAGE
-        );
-
-        return (
-          <div className="max-w-7xl mx-auto px-6 space-y-8">
-            <div className="flex flex-col gap-6 border-b pb-8 mb-8">
-              <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center pb-4 border-b border-dashed border-gray-200">
-                  <div className="flex items-center gap-2 w-full md:w-auto relative">
-                      <Search size={14} className="absolute left-3 text-gray-400"/>
-                      <input 
-                          type="text" 
-                          placeholder="搜尋款式名稱或標籤..." 
-                          value={catalogSearch} 
-                          onChange={(e) => setCatalogSearch(e.target.value)}
-                          className="pl-9 pr-4 py-2 border border-gray-200 rounded-full text-xs w-full md:w-64 outline-none focus:border-[#C29591] bg-white transition-colors"
-                      />
-                  </div>
-                  <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 font-bold tracking-widest"><ArrowDownUp size={12} className="inline mr-1"/>SORT</span>
-                      <select 
-                          value={sortOption} 
-                          onChange={(e) => setSortOption(e.target.value)}
-                          className="text-xs border border-gray-200 rounded-full px-3 py-1.5 outline-none bg-white text-gray-600 focus:border-[#C29591]"
-                      >
-                          <option value="latest">最新上架</option>
-                          <option value="popular">熱門排行</option>
-                      </select>
-                  </div>
-              </div>
-
-              <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
-                <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
-                <div className="flex flex-wrap gap-2 flex-1">
-                    {['全部', ...(settings.styleCategories.length > 0 ? settings.styleCategories : CONSTANTS.CATS)].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
+      case 'catalog': return (
+        <div className="max-w-7xl mx-auto px-6 space-y-8">
+          <div className="flex flex-col gap-6 border-b pb-8 mb-8">
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center pb-4 border-b border-dashed border-gray-200">
+                <div className="flex items-center gap-2 w-full md:w-auto relative">
+                    <Search size={14} className="absolute left-3 text-gray-400"/>
+                    <input 
+                        type="text" 
+                        placeholder="搜尋款式名稱或標籤..." 
+                        value={catalogSearch} 
+                        onChange={(e) => setCatalogSearch(e.target.value)}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-full text-xs w-full md:w-64 outline-none focus:border-[#C29591] bg-white transition-colors"
+                    />
                 </div>
-              </div>
-              <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
-                <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
-                <div className="flex flex-wrap gap-2 flex-1">
-                    {CONSTANTS.PRICES.map(p => <button key={p} onClick={() => setFilters(prev=>({...prev, price:p}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.price===p ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{p}</button>)}
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 font-bold tracking-widest"><ArrowDownUp size={12} className="inline mr-1"/>SORT</span>
+                    <select 
+                        value={sortOption} 
+                        onChange={(e) => setSortOption(e.target.value)}
+                        className="text-xs border border-gray-200 rounded-full px-3 py-1.5 outline-none bg-white text-gray-600 focus:border-[#C29591]"
+                    >
+                        <option value="latest">最新上架</option>
+                        <option value="popular">熱門排行</option>
+                    </select>
                 </div>
-              </div>
-              {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
-            </div>
-            
-            <div className="grid md:grid-cols-3 gap-10">
-              {currentItems.length > 0 ? currentItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' }); setStep('form'); window.scrollTo(0,0); }} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
             </div>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 py-12">
-                    <button 
-                        disabled={currentPage === 1} 
-                        onClick={() => {setCurrentPage(p => p - 1); window.scrollTo(0,0);}}
-                        className="px-4 py-2 border rounded-full text-xs text-gray-600 disabled:text-gray-300 disabled:border-gray-100 hover:border-[#C29591]"
-                    >
-                        <ChevronLeft size={16}/>
-                    </button>
-                    <span className="text-xs text-gray-400 tracking-widest">PAGE {currentPage} / {totalPages}</span>
-                    <button 
-                        disabled={currentPage === totalPages} 
-                        onClick={() => {setCurrentPage(p => p + 1); window.scrollTo(0,0);}}
-                        className="px-4 py-2 border rounded-full text-xs text-gray-600 disabled:text-gray-300 disabled:border-gray-100 hover:border-[#C29591]"
-                    >
-                        <ChevronRight size={16}/>
-                    </button>
-                </div>
-            )}
-            <div className="pb-12"></div>
+            <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
+              <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
+              <div className="flex flex-wrap gap-2 flex-1">
+                  {['全部', ...(settings.styleCategories.length > 0 ? settings.styleCategories : CONSTANTS.CATS)].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
+              </div>
+            </div>
+            <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
+              <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
+              <div className="flex flex-wrap gap-2 flex-1">
+                  {CONSTANTS.PRICES.map(p => <button key={p} onClick={() => setFilters(prev=>({...prev, price:p}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.price===p ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{p}</button>)}
+              </div>
+            </div>
+            {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
           </div>
-        );
-      }
+          
+          <div className="grid md:grid-cols-3 gap-10 pb-24">
+            {processedItems.length > 0 ? processedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' }); setStep('form'); window.scrollTo(0,0); }} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
+          </div>
+        </div>
+      );
       case 'notice': return (
         <div className="max-w-3xl mx-auto px-6">
           <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">預約須知</h2>
@@ -727,12 +681,9 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
-            
-            {/* 修改：後台分頁標籤列，強制左右滑動 */}
-            <div className="flex border-b px-4 md:px-8 bg-[#FAF9F6] overflow-x-auto overflow-y-hidden whitespace-nowrap hide-scrollbar overscroll-x-contain" style={{ touchAction: 'pan-x' }}>
+            <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
-            
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {mgrTab === 'stores' && <div className="space-y-6">
                 <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4><p className="text-[10px] text-gray-400 mt-1">設定品牌旗下的所有分店</p></div>
