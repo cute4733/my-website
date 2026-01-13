@@ -22,7 +22,6 @@ const appId = 'uniwawa01';
 
 const CONSTANTS = {
   CATS: ['極簡氣質', '華麗鑽飾', '藝術手繪', '日系暈染', '貓眼系列'],
-  // 修正 6: 更新價位分類
   PRICES: ['全部', '1400以下', '1400-1800', '1800以上'], 
   DAYS: ['日', '一', '二', '三', '四', '五', '六'],
   CLEAN: 20, MAX_DAYS: 30,
@@ -198,7 +197,7 @@ export default function App() {
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
   
-  // 修正 4: 初始化 settings 時直接帶入預設值，避免閃爍
+  // 修正 1: 強制預設為 CONSTANTS.CATS 避免閃爍
   const [settings, setSettings] = useState({ 
       stores: [], 
       staff: [], 
@@ -285,7 +284,6 @@ export default function App() {
 
   const saveSettings = async (s) => setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), s);
 
-  // 修正 2: 雙重確認刪除
   const handleDeleteBooking = (id) => {
       if(confirm('確定取消此預約？')) {
           if(confirm('再次確認：真的要刪除這筆預約嗎？刪除後無法復原。')) {
@@ -353,7 +351,6 @@ export default function App() {
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
 
-  // 修正 5: 配合修正 6 更新價位區間判斷
   const filteredItems = useMemo(() => items.filter(i => {
     const p = Number(i.price);
     const styleMatch = filters.style === '全部' || i.category === filters.style;
@@ -398,10 +395,6 @@ export default function App() {
            </div>
         </div>
         <div className="bg-white border border-[#EAE7E2] p-8 shadow-sm space-y-8">
-          <div className="border-b pb-6">
-            <label className="text-xs font-bold text-gray-400 mb-2 block">選擇預約門市</label>
-            <div className="flex flex-wrap gap-3">{settings.stores.map(s => <button key={s.id} onClick={() => setBookData(p => ({ ...p, storeId: s.id, date: '', time: '' }))} className={`px-4 py-2 text-xs border rounded-full ${String(bookData.storeId) === String(s.id) ? 'bg-[#463E3E] text-white' : 'hover:border-[#C29591]'}`}>{s.name}</button>)}</div>
-          </div>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="relative">
                 <input type="text" placeholder="顧客姓名 (必填，不可含數字)" className={`w-full border-b py-2 outline-none ${/\d/.test(bookData.name) ? 'border-red-300 text-red-500' : ''}`} value={bookData.name} onChange={e => setBookData(p=>({...p, name: e.target.value}))} />
@@ -420,6 +413,13 @@ export default function App() {
             
             <div className="md:col-span-2 flex items-center gap-2 border-b py-2 text-gray-400 text-xs"><CreditCard size={16}/> 付款方式：<span className="text-[#463E3E]">門市付款</span></div>
           </div>
+
+          {/* 修正 3: 將門市選擇區塊移動到付款方式下方 */}
+          <div className="border-b pb-6">
+            <label className="text-xs font-bold text-gray-400 mb-2 block">選擇預約門市</label>
+            <div className="flex flex-wrap gap-3">{settings.stores.map(s => <button key={s.id} onClick={() => setBookData(p => ({ ...p, storeId: s.id, date: '', time: '' }))} className={`px-4 py-2 text-xs border rounded-full ${String(bookData.storeId) === String(s.id) ? 'bg-[#463E3E] text-white' : 'hover:border-[#C29591]'}`}>{s.name}</button>)}</div>
+          </div>
+
           <div className="flex justify-center pt-2"><CustomCalendar selectedDate={bookData.date} onDateSelect={d => setBookData(p=>({...p, date: d, time: ''}))} settings={settings} selectedStoreId={bookData.storeId} isDayFull={d => TIME_SLOTS.every(t => isTimeFull(d, t))} /></div>
           {bookData.date && bookData.storeId && <div className="grid grid-cols-4 md:grid-cols-6 gap-2">{TIME_SLOTS.map(t => <button key={t} disabled={isTimeFull(bookData.date, t)} onClick={() => setBookData(p=>({...p, time: t}))} className={`py-2 text-[10px] border ${bookData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white disabled:opacity-20'}`}>{t}</button>)}</div>}
           
@@ -484,14 +484,15 @@ export default function App() {
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {/* 修正 4: 直接顯示 settings.styleCategories，若為空則先顯示 CONSTANTS.CATS 避免閃爍 */}
+                  {/* 修正 1: 雙重保險確保分類按鈕不會閃爍空白 */}
                   {(settings.styleCategories.length > 0 ? settings.styleCategories : CONSTANTS.CATS).map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">PRICE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {CONSTANTS.PRICES.map(p => <button key={p} onClick={() => setFilters(p=>({...p, price:p}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.price===p ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{p}</button>)}
+                  {/* 修正 2: 將參數名稱改為 prev 避免與 map 的 p 衝突 */}
+                  {CONSTANTS.PRICES.map(p => <button key={p} onClick={() => setFilters(prev=>({...prev, price:p}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.price===p ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{p}</button>)}
               </div>
             </div>
             {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
@@ -534,7 +535,6 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-6">
           <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">門市資訊</h2>
           <div className="grid md:grid-cols-2 gap-8"><div className="bg-white border hover:border-[#C29591] transition-colors">
-            {/* 修正 1: 回復原始 img 標籤 */}
             <div className="aspect-video bg-gray-100 relative">
                 <img src={CONSTANTS.IMG_STORE} className="w-full h-full object-cover" alt="" />
             </div>
@@ -586,7 +586,6 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
-            {/* 修正 3: 保持 touchAction: 'pan-x' 防止垂直滾動 */}
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
