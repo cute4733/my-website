@@ -147,7 +147,6 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
   );
 };
 
-// 修正 1: 後台月曆樣式，移除過度樣式，限制最大寬度
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const year = viewDate.getFullYear(); 
@@ -215,6 +214,9 @@ export default function App() {
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
   const [search, setSearch] = useState({ key: '', res: [] });
+  
+  // 修正 1: 門市圖片載入狀態
+  const [isStoreImgLoaded, setIsStoreImgLoaded] = useState(false);
 
   useEffect(() => { signInAnonymously(auth); onAuthStateChanged(auth, setUser); }, []);
   useEffect(() => {
@@ -277,6 +279,15 @@ export default function App() {
 
   const saveSettings = async (s) => setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), s);
 
+  // 修正 2: 雙重確認刪除
+  const handleDeleteBooking = (id) => {
+      if(confirm('確定取消此預約？')) {
+          if(confirm('再次確認：真的要刪除這筆預約嗎？刪除後無法復原。')) {
+              deleteDoc(doc(db,'artifacts',appId,'public','data','bookings',id));
+          }
+      }
+  };
+
   const confirmBooking = async () => {
     setStatus(p => ({ ...p, submitting: true }));
     const amount = getAmount(); const duration = getDuration();
@@ -308,7 +319,6 @@ export default function App() {
           return bDate >= today && bDate <= end;
       });
 
-      // 修正 2: CSV 欄位調整，金額在最後
       const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '預約時長', '金額'];
       const rows = targetBookings.map(b => [
         b.date, b.time, b.storeName, b.name, b.phone, b.email, b.itemTitle, b.addonName, b.totalDuration, b.totalAmount
@@ -337,8 +347,9 @@ export default function App() {
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
 
+  // 修正 5: 強制轉型為 Number 以修復價格篩選
   const filteredItems = useMemo(() => items.filter(i => (filters.style === '全部' || i.category === filters.style) && 
-    (filters.price === '全部' || (filters.price === '1300以下' && i.price < 1300) || (filters.price === '1300-1900' && i.price >= 1300 && i.price <= 1900) || (filters.price === '1900以上' && i.price > 1900)) &&
+    (filters.price === '全部' || (filters.price === '1300以下' && Number(i.price) < 1300) || (filters.price === '1300-1900' && Number(i.price) >= 1300 && Number(i.price) <= 1900) || (filters.price === '1900以上' && Number(i.price) > 1900)) &&
     (!filters.tag || i.tags?.includes(filters.tag))), [items, filters]);
 
   const storeBookings = useMemo(() => bookings.filter(b => adminSel.store === 'all' || String(b.storeId) === String(adminSel.store)), [bookings, adminSel.store]);
@@ -458,7 +469,8 @@ export default function App() {
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {['全部', ...settings.styleCategories].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
+                  {/* 修正 4: 確保分類按鈕始終顯示，避免閃爍 */}
+                  {['全部', ...(settings.styleCategories || CONSTANTS.CATS)].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
               </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
@@ -506,9 +518,17 @@ export default function App() {
       case 'store': return (
         <div className="max-w-4xl mx-auto px-6">
           <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-12 text-[#463E3E]">門市資訊</h2>
-          <div className="grid md:grid-cols-2 gap-8"><div className="bg-white border hover:border-[#C29591] transition-colors"><div className="aspect-video bg-gray-100 relative"><img src={CONSTANTS.IMG_STORE} className="w-full h-full object-cover" alt="" /></div><div className="p-8"><h3 className="text-lg font-medium tracking-widest mb-2">桃園文中店</h3><div className="w-8 h-[1px] bg-[#C29591] mb-6"></div><div className="flex gap-3 text-xs text-gray-500 mb-6"><MapPin size={16} className="text-[#C29591]" /> 桃園區文中三路 67 號 1 樓</div>
-          {/* 修正 5: 更改文中店連結 */}
-          <button onClick={() => window.open('https://maps.app.goo.gl/B5ekaXi85mrWtXBJ6', '_blank')} className="w-full border py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white">GOOGLE MAPS</button></div></div></div>
+          <div className="grid md:grid-cols-2 gap-8"><div className="bg-white border hover:border-[#C29591] transition-colors">
+            {/* 修正 1: 圖片載入狀態與過渡效果 */}
+            <div className="aspect-video bg-gray-100 relative">
+                <img 
+                    src={CONSTANTS.IMG_STORE} 
+                    className={`w-full h-full object-cover transition-opacity duration-700 ${isStoreImgLoaded ? 'opacity-100' : 'opacity-0'}`} 
+                    alt="" 
+                    onLoad={() => setIsStoreImgLoaded(true)}
+                />
+            </div>
+            <div className="p-8"><h3 className="text-lg font-medium tracking-widest mb-2">桃園文中店</h3><div className="w-8 h-[1px] bg-[#C29591] mb-6"></div><div className="flex gap-3 text-xs text-gray-500 mb-6"><MapPin size={16} className="text-[#C29591]" /> 桃園區文中三路 67 號 1 樓</div><button onClick={() => window.open('https://maps.app.goo.gl/B5ekaXi85mrWtXBJ6', '_blank')} className="w-full border py-3 text-xs tracking-widest text-gray-400 hover:bg-[#463E3E] hover:text-white">GOOGLE MAPS</button></div></div></div>
         </div>
       );
       case 'about': return (
@@ -529,12 +549,7 @@ export default function App() {
       case 'contact': return (
         <div className="max-w-3xl mx-auto px-6 text-center">
           <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] mb-12">聯絡我們</h2>
-          <div className="bg-white p-10 border shadow-sm">
-            {/* 修正 3: 聯絡我們文字更新 */}
-            <p className="text-xs text-gray-500 mb-6 leading-relaxed">如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>(預約請直接使用網站功能)</p>
-            {/* 修正 6: Line 連結更新 */}
-            <a href="https://lin.ee/RNTAv2L" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold text-sm"><MessageCircle size={20} /> 加入 LINE 好友</a>
-          </div>
+          <div className="bg-white p-10 border shadow-sm"><p className="text-xs text-gray-500 mb-6 leading-relaxed">如有任何疑問，歡迎加入 LINE 官方帳號諮詢<br/>(預約請直接使用網站功能)</p><a href="https://lin.ee/RNTAv2L" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#06C755] text-white px-8 py-3 rounded-full font-bold text-sm"><MessageCircle size={20} /> 加入 LINE 好友</a></div>
         </div>
       );
       default: return null;
@@ -549,8 +564,8 @@ export default function App() {
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer mb-4 md:mb-0" onClick={() => {setTab('catalog'); setStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center overflow-x-auto no-scrollbar justify-center">
             {['about:關於', 'catalog:款式', 'notice:須知', 'store:門市', 'search:查詢', 'contact:聯絡'].map(t => { const [k,v]=t.split(':'); return <button key={k} onClick={() => {setTab(k); setStep('none'); if(k==='search') setSearch({key:'',res:[]});}} className={`flex-shrink-0 ${tab===k?'text-[#C29591]':''}`}>{v}</button>; })}
-            {/* 修正 4: 移除 Settings 按鈕的放大效果與強制移除底線/外框 */}
-            {isLoggedIn ? <div className="flex gap-4 border-l pl-4 flex-shrink-0"><button onClick={() => handleOpenUpload()} className="text-[#C29591] hover:scale-110"><Plus size={18}/></button><button onClick={() => setStatus(p=>({...p, mgrOpen:true}))} className="text-[#C29591] border-none outline-none no-underline"><Settings size={18}/></button></div> : <button onClick={() => setStatus(p=>({...p, adminOpen:true}))} className="text-gray-300 hover:text-[#C29591] flex-shrink-0"><Lock size={14}/></button>}
+            {/* 修正 1: 移除了 hover:scale-110 與其他外框代碼，避免位移與橫線 */}
+            {isLoggedIn ? <div className="flex gap-4 border-l pl-4 flex-shrink-0"><button onClick={() => handleOpenUpload()} className="text-[#C29591] hover:scale-110"><Plus size={18}/></button><button onClick={() => setStatus(p=>({...p, mgrOpen:true}))} className="text-[#C29591]"><Settings size={18}/></button></div> : <button onClick={() => setStatus(p=>({...p, adminOpen:true}))} className="text-gray-300 hover:text-[#C29591] flex-shrink-0"><Lock size={14}/></button>}
           </div>
         </div>
       </nav>
@@ -562,7 +577,8 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center md:p-4 backdrop-blur-sm">
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
-            <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar">
+            {/* 修正 3: 新增 touchAction: 'pan-x' 防止垂直滾動 */}
+            <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
               {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
@@ -601,11 +617,11 @@ export default function App() {
                     <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">預約訂單管理</h4><p className="text-[10px] text-gray-400 mt-1">查看與管理顧客預約(近三月內預約)</p></div>
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded"><Filter size={14}/><select className="text-xs bg-transparent" value={adminSel.store} onChange={e=>setAdminSel(p=>({...p, store:e.target.value}))}><option value="all">全店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><div className="w-[1px] h-6 bg-gray-300 mx-1"></div><button onClick={()=>setViewMode('list')} className={`p-2 ${viewMode==='list'?'bg-white shadow text-[#C29591]':''}`}><ListIcon size={16}/></button><button onClick={()=>{setViewMode('calendar');setAdminSel(p=>({...p, date:getTodayStr()}))}} className={`p-2 ${viewMode==='calendar'?'bg-white shadow text-[#C29591]':''}`}><Grid size={16}/></button><button onClick={handleExportCSV} className="p-2"><Download size={16}/></button></div>
                 </div>
-                {viewMode === 'list' ? <div className="flex-1 overflow-y-auto pr-2 space-y-3">{listBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><button onClick={()=>confirm('取消？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','bookings',b.id))}><Trash2 size={16}/></button></div>)}</div> : 
+                {viewMode === 'list' ? <div className="flex-1 overflow-y-auto pr-2 space-y-3">{listBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={16}/></button></div>)}</div> : 
                 <div className="flex flex-col md:flex-row gap-6 h-full"><div className="w-full md:w-64 flex-shrink-0"><AdminBookingCalendar bookings={storeBookings} selectedDate={adminSel.date} onDateSelect={d=>setAdminSel(p=>({...p, date:d}))}/></div>
                 <div className="flex-1 overflow-y-auto space-y-2 p-2 bg-[#FAF9F6] border border-dashed h-full">
                     <h5 className="text-xs font-bold text-[#463E3E] sticky top-0 bg-[#FAF9F6] pb-2 border-b border-gray-200">{adminSel.date} 預約</h5>
-                    {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><button onClick={()=>confirm('取消？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','bookings',b.id))}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
+                    {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
                 </div></div>}
               </div>}
             </div>
