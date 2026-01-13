@@ -190,6 +190,7 @@ const AdminModal = ({ isOpen, close, onLogin }) => isOpen ? (
   </div>
 ) : null;
 
+// --- Corrected ManagerModal with Formatting ---
 const ManagerModal = ({ isOpen, close, settings, setSettings, bookings, items, onDeleteBooking }) => {
   const [tab, setTab] = useState('stores');
   const [inputs, setInputs] = useState({ store:'', cat:'', tag:'', hDate:'', hStore:'all', addon:{name:'',p:'',d:''} });
@@ -238,17 +239,67 @@ const ManagerModal = ({ isOpen, close, settings, setSettings, bookings, items, o
                 <form onSubmit={addAddon} className="bg-gray-50 p-3 border space-y-2"><input placeholder="名稱" className="w-full border p-2 text-xs" value={inputs.addon.name} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, name:e.target.value}})}/><div className="flex gap-2"><input placeholder="$" type="number" className="w-1/2 border p-2 text-xs" value={inputs.addon.p} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, p:e.target.value}})}/><input placeholder="分" type="number" className="w-1/2 border p-2 text-xs" value={inputs.addon.d} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, d:e.target.value}})}/></div><Btn type="submit" className="w-full bg-[#463E3E] text-white py-1 text-xs">新增</Btn></form>
               </div>
           </div>}
-          {tab === 'staff' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {tab === 'staff' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="space-y-4">
-                 <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-2"><h4 className="font-bold text-sm">人員名單</h4><Btn onClick={()=>{const n=prompt('姓名?'); n && save({...settings, staff:[...settings.staff, {id:Date.now().toString(), name:n, storeId:settings.stores[0]?.id, leaveDates:[]}]})}} className="text-[10px] bg-[#C29591] text-white px-3 py-1 rounded-full">+ 新增</Btn></div>
-                 {settings.staff.map(s=><div key={s.id} className="border p-4 bg-gray-50 space-y-2"><div className="flex justify-between font-bold text-xs"><span>{s.name}</span><select value={s.storeId} onChange={e=>save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, storeId:e.target.value}:x)})} className="ml-2 border">{settings.stores.map(st=><option key={st.id} value={st.id}>{st.name}</option>)}</select><Btn onClick={()=>confirm('刪除?')&&save({...settings, staff:settings.staff.filter(x=>x.id!==s.id)})><Trash2 size={14}/></Btn></div><div className="border-t pt-2"><label className="text-[10px] text-gray-400">休假: </label><input type="date" className="text-[10px] border p-1" onChange={e=>{if(e.target.value) save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, leaveDates:[...x.leaveDates, e.target.value].sort()}:x)})}}/><div className="flex flex-wrap gap-1 mt-1">{s.leaveDates.map(d=><span key={d} className="text-[9px] bg-white border px-1 flex items-center gap-1">{d}<X size={8} onClick={()=>save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, leaveDates:x.leaveDates.filter(l=>l!==d)}:x)})}/></span>)}</div></div></div>)}
+                <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-2">
+                  <h4 className="font-bold text-sm">人員名單</h4>
+                  <Btn onClick={() => {
+                    const n = prompt('姓名?');
+                    n && save({ ...settings, staff: [...settings.staff, { id: Date.now().toString(), name: n, storeId: settings.stores[0]?.id, leaveDates: [] }] });
+                  }} className="text-[10px] bg-[#C29591] text-white px-3 py-1 rounded-full">+ 新增</Btn>
+                </div>
+                {settings.staff.map(s => (
+                  <div key={s.id} className="border p-4 bg-gray-50 space-y-2">
+                    <div className="flex justify-between font-bold text-xs">
+                      <span>{s.name}</span>
+                      <select value={s.storeId} onChange={e => save({ ...settings, staff: settings.staff.map(x => x.id === s.id ? { ...x, storeId: e.target.value } : x) })} className="ml-2 border">
+                        {settings.stores.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+                      </select>
+                      <Btn onClick={() => confirm('刪除?') && save({ ...settings, staff: settings.staff.filter(x => x.id !== s.id) })}>
+                        <Trash2 size={14} />
+                      </Btn>
+                    </div>
+                    <div className="border-t pt-2">
+                      <label className="text-[10px] text-gray-400">休假: </label>
+                      <input type="date" className="text-[10px] border p-1" onChange={e => {
+                        if (e.target.value) save({ ...settings, staff: settings.staff.map(x => x.id === s.id ? { ...x, leaveDates: [...x.leaveDates, e.target.value].sort() } : x) });
+                      }} />
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {s.leaveDates.map(d => (
+                          <span key={d} className="text-[9px] bg-white border px-1 flex items-center gap-1">
+                            {d}
+                            <X size={8} onClick={() => save({ ...settings, staff: settings.staff.map(x => x.id === s.id ? { ...x, leaveDates: x.leaveDates.filter(l => l !== d) } : x) })} />
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="space-y-4">
-                 <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">公休日</h4>
-                 <div className="flex gap-2 bg-gray-50 p-2 border"><select className="text-xs border" value={inputs.hStore} onChange={e=>setInputs({...inputs, hStore:e.target.value})}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 text-xs border p-1" value={inputs.hDate} onChange={e=>setInputs({...inputs, hDate:e.target.value})}/><Btn onClick={addHoliday} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn></div>
-                 <div className="flex flex-wrap gap-2">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] border px-2 py-1 bg-white flex items-center gap-1">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name})<X size={10} onClick={()=>save({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
+                <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">公休日</h4>
+                <div className="flex gap-2 bg-gray-50 p-2 border">
+                  <select className="text-xs border" value={inputs.hStore} onChange={e => setInputs({ ...inputs, hStore: e.target.value })}>
+                    <option value="all">全品牌</option>
+                    {settings.stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <input type="date" className="flex-1 text-xs border p-1" value={inputs.hDate} onChange={e => setInputs({ ...inputs, hDate: e.target.value })} />
+                  <Btn onClick={addHoliday} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {settings.holidays.map((h, i) => (
+                    <span key={i} className="text-[10px] border px-2 py-1 bg-white flex items-center gap-1">
+                      {h.date} ({h.storeId === 'all' ? '全' : settings.stores.find(s => s.id === h.storeId)?.name})
+                      <X size={10} onClick={() => save({ ...settings, holidays: settings.holidays.filter((_, idx) => idx !== i) })} />
+                    </span>
+                  ))}
+                </div>
               </div>
-          </div>}
+            </div>
+          )}
+
           {tab === 'bookings' && <div className="h-full flex flex-col space-y-4">
               <div className="flex justify-between border-b pb-2 items-center">
                 <div className="flex gap-2 items-center"><Filter size={14}/><select className="text-xs border-none outline-none font-bold" value={adminFilter.store} onChange={e=>setAdminFilter({...adminFilter, store:e.target.value})}><option value="all">全部分店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
