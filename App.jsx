@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -197,15 +197,18 @@ export default function App() {
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
   
+  // 初始化時即使用 CONSTANTS.CATS，確保分類按鈕在載入前就顯示正確，不會閃爍
   const [settings, setSettings] = useState({ 
       stores: [], 
       staff: [], 
       holidays: [], 
       styleCategories: CONSTANTS.CATS, 
-      savedTags: [] 
+      savedTags: [],
+      // 新增黑名單預設
+      blacklist: []
   });
   
-  const [inputs, setInputs] = useState({ holiday: { date: '', storeId: 'all' }, store: '', category: '', tag: '', addon: { name: '', price: '', duration: '' }, pwd: '' });
+  const [inputs, setInputs] = useState({ holiday: { date: '', storeId: 'all' }, store: '', category: '', tag: '', addon: { name: '', price: '', duration: '' }, pwd: '', blacklistPhone: '' });
   const [mgrTab, setMgrTab] = useState('stores');
   const [viewMode, setViewMode] = useState('list');
   const [adminSel, setAdminSel] = useState({ date: '', store: 'all' });
@@ -218,6 +221,10 @@ export default function App() {
   const [status, setStatus] = useState({ submitting: false, adminOpen: false, uploadOpen: false, mgrOpen: false, uploading: false });
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
+  // 新增: 搜尋與排序狀態
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [sortOption, setSortOption] = useState('latest'); // 'latest' | 'popular'
+
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
   const [search, setSearch] = useState({ key: '', res: [] });
@@ -292,6 +299,12 @@ export default function App() {
   };
 
   const confirmBooking = async () => {
+    // 新增: 黑名單檢查
+    if ((settings.blacklist || []).includes(bookData.phone)) {
+        alert("此號碼無法進行預約，請聯繫客服。");
+        return;
+    }
+
     setStatus(p => ({ ...p, submitting: true }));
     const amount = getAmount(); const duration = getDuration();
     const storeName = settings.stores.find(s => s.id === bookData.storeId)?.name || '未指定';
@@ -350,18 +363,41 @@ export default function App() {
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
 
-  const filteredItems = useMemo(() => items.filter(i => {
-    const p = Number(i.price);
-    const styleMatch = filters.style === '全部' || i.category === filters.style;
-    
-    let priceMatch = true;
-    if (filters.price === '1400以下') priceMatch = p < 1400;
-    else if (filters.price === '1400-1800') priceMatch = p >= 1400 && p <= 1800;
-    else if (filters.price === '1800以上') priceMatch = p > 1800;
+  // 修正: 搜尋與排序邏輯
+  const processedItems = useMemo(() => {
+    // 1. 基礎篩選 (分類、價格、標籤)
+    let res = items.filter(i => {
+        const p = Number(i.price);
+        const styleMatch = filters.style === '全部' || i.category === filters.style;
+        let priceMatch = true;
+        if (filters.price === '1400以下') priceMatch = p < 1400;
+        else if (filters.price === '1400-1800') priceMatch = p >= 1400 && p <= 1800;
+        else if (filters.price === '1800以上') priceMatch = p > 1800;
+        const tagMatch = !filters.tag || i.tags?.includes(filters.tag);
+        return styleMatch && priceMatch && tagMatch;
+    });
 
-    const tagMatch = !filters.tag || i.tags?.includes(filters.tag);
-    return styleMatch && priceMatch && tagMatch;
-  }), [items, filters]);
+    // 2. 關鍵字搜尋 (標題或標籤)
+    if(catalogSearch) {
+        const lowerKey = catalogSearch.toLowerCase();
+        res = res.filter(i => i.title.toLowerCase().includes(lowerKey) || i.tags?.some(t => t.toLowerCase().includes(lowerKey)));
+    }
+
+    // 3. 排序 (最新 vs 熱門)
+    if (sortOption === 'popular') {
+        // 計算熱門度: 統計訂單中 itemTitle 出現次數
+        const popularityMap = bookings.reduce((acc, b) => {
+            if(b.itemTitle) acc[b.itemTitle] = (acc[b.itemTitle] || 0) + 1;
+            return acc;
+        }, {});
+        res.sort((a, b) => (popularityMap[b.title] || 0) - (popularityMap[a.title] || 0));
+    } else {
+        // 預設: 最新 (依照 createdAt 降序，若無則依 ID 或 price)
+        res.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    }
+
+    return res;
+  }, [items, filters, catalogSearch, sortOption, bookings]);
 
   const storeBookings = useMemo(() => bookings.filter(b => adminSel.store === 'all' || String(b.storeId) === String(adminSel.store)), [bookings, adminSel.store]);
 
@@ -479,10 +515,34 @@ export default function App() {
       case 'catalog': return (
         <div className="max-w-7xl mx-auto px-6 space-y-8">
           <div className="flex flex-col gap-6 border-b pb-8 mb-8">
+            {/* 新增: 搜尋與排序工具列 */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center pb-4 border-b border-dashed border-gray-200">
+                <div className="flex items-center gap-2 w-full md:w-auto relative">
+                    <Search size={14} className="absolute left-3 text-gray-400"/>
+                    <input 
+                        type="text" 
+                        placeholder="搜尋款式名稱或標籤..." 
+                        value={catalogSearch} 
+                        onChange={(e) => setCatalogSearch(e.target.value)}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-full text-xs w-full md:w-64 outline-none focus:border-[#C29591] bg-white transition-colors"
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 font-bold tracking-widest"><ArrowDownUp size={12} className="inline mr-1"/>SORT</span>
+                    <select 
+                        value={sortOption} 
+                        onChange={(e) => setSortOption(e.target.value)}
+                        className="text-xs border border-gray-200 rounded-full px-3 py-1.5 outline-none bg-white text-gray-600 focus:border-[#C29591]"
+                    >
+                        <option value="latest">最新上架</option>
+                        <option value="popular">熱門排行</option>
+                    </select>
+                </div>
+            </div>
+
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
               <div className="flex flex-wrap gap-2 flex-1">
-                  {/* 修正 1: 直接渲染，確保全部按鈕在第一位 */}
                   {['全部', ...(settings.styleCategories.length > 0 ? settings.styleCategories : CONSTANTS.CATS)].map(c => <button key={c} onClick={() => setFilters(p=>({...p, style:c}))} className={`px-4 py-1.5 text-xs rounded-full border ${filters.style===c ? 'bg-[#463E3E] text-white border-[#463E3E]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#C29591]'}`}>{c}</button>)}
               </div>
             </div>
@@ -494,8 +554,9 @@ export default function App() {
             </div>
             {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
           </div>
+          
           <div className="grid md:grid-cols-3 gap-10 pb-24">
-            {filteredItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' }); setStep('form'); window.scrollTo(0,0); }} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />)}
+            {processedItems.length > 0 ? processedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' }); setStep('form'); window.scrollTo(0,0); }} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
           </div>
         </div>
       );
@@ -584,7 +645,8 @@ export default function App() {
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
-              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
+              {/* 新增: Blacklist Tab (Ban Icon) */}
+              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {mgrTab === 'stores' && <div className="space-y-6">
@@ -628,6 +690,44 @@ export default function App() {
                     <h5 className="text-xs font-bold text-[#463E3E] sticky top-0 bg-[#FAF9F6] pb-2 border-b border-gray-200">{adminSel.date} 預約</h5>
                     {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
                 </div></div>}
+              </div>}
+
+              {/* 新增: Blacklist Section */}
+              {mgrTab === 'blacklist' && <div className="space-y-6">
+                  <div className="border-l-4 border-[#C29591] pl-4">
+                      <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">黑名單管理</h4>
+                      <p className="text-[10px] text-gray-400 mt-1">輸入電話號碼以禁止該顧客預約</p>
+                  </div>
+                  <div className="flex gap-2">
+                      <input 
+                          type="tel" 
+                          className="flex-1 border p-2 text-xs" 
+                          placeholder="輸入電話號碼" 
+                          value={inputs.blacklistPhone} 
+                          onChange={e => setInputs(p => ({...p, blacklistPhone: e.target.value.replace(/\D/g, '')}))}
+                      />
+                      <button 
+                          onClick={() => {
+                              if(!inputs.blacklistPhone) return;
+                              saveSettings({...settings, blacklist: [...(settings.blacklist || []), inputs.blacklistPhone]});
+                              setInputs(p => ({...p, blacklistPhone: ''}));
+                          }} 
+                          className="bg-[#463E3E] text-white px-4 text-xs"
+                      >
+                          新增
+                      </button>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {(settings.blacklist || []).map(phone => (
+                          <div key={phone} className="border p-3 flex justify-between items-center bg-white shadow-sm">
+                              <span className="text-xs font-bold text-[#463E3E]">{phone}</span>
+                              <button onClick={() => saveSettings({...settings, blacklist: settings.blacklist.filter(p => p !== phone)})}>
+                                  <Trash2 size={14} className="text-gray-300 hover:text-red-500"/>
+                              </button>
+                          </div>
+                      ))}
+                      {(settings.blacklist || []).length === 0 && <p className="col-span-4 text-center text-gray-300 text-xs py-10">目前無黑名單</p>}
+                  </div>
               </div>}
             </div>
           </div>
