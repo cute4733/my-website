@@ -62,6 +62,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
 
   const move = (dir) => setIdx((p) => (p + dir + imgs.length) % imgs.length);
   const handleTouch = (e, type) => {
+    // 這裡只處理單指滑動圖片，不影響全局縮放攔截
     if (type === 's') { te.current = null; ts.current = e.targetTouches[0].clientX; }
     if (type === 'm') te.current = e.targetTouches[0].clientX;
     if (type === 'e' && ts.current && te.current) {
@@ -190,17 +191,15 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
 };
 
 export default function App() {
-  // --- 禁止縮放的核心邏輯 (Start) ---
+  // --- 禁止縮放 (強制攔截版) (Start) ---
   useEffect(() => {
-    // 1. 強制設定 Meta Viewport
+    // 1. 強制設定 Meta Viewport (基礎防護)
     const metaTagId = 'viewport-meta-no-zoom';
     let meta = document.getElementById(metaTagId);
-    if (!meta) {
-      meta = document.querySelector('meta[name="viewport"]');
-    }
+    if (!meta) meta = document.querySelector('meta[name="viewport"]');
     
-    // 設定 content 禁止 user-scalable
-    const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+    // 將 minimum-scale 設為 1.0 可以幫助一些瀏覽器理解
+    const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimum-scale=1.0, viewport-fit=cover';
     
     if (meta) {
       meta.content = content;
@@ -212,20 +211,49 @@ export default function App() {
       document.head.appendChild(newMeta);
     }
 
-    // 2. 阻擋 iOS Safari 雙指縮放手勢 (Gesture Start)
+    // 2. JavaScript 強制攔截多點觸控 (這是最關鍵的部分)
+    // 解決下滑時雙指縮放、或兩根手指碰到螢幕的情況
+
+    const preventMultiTouch = (e) => {
+      // 如果螢幕上有超過 1 根手指，就視為縮放意圖，直接禁止
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    // 使用 passive: false 才能在事件中調用 preventDefault()
+    document.addEventListener('touchstart', preventMultiTouch, { passive: false });
+    document.addEventListener('touchmove', preventMultiTouch, { passive: false });
+
+    // 3. 阻擋 iOS Safari 的手勢縮放 (Gesture Events)
     const preventGestureZoom = (e) => {
       e.preventDefault();
     };
     document.addEventListener('gesturestart', preventGestureZoom);
+    document.addEventListener('gesturechange', preventGestureZoom);
+    document.addEventListener('gestureend', preventGestureZoom);
 
-    // 3. (Optional) 阻擋雙擊縮放 - 雖然 CSS touch-action 已經處理，但 JS 可做雙重保險
-    // 這裡我們主要依賴下方的 CSS touch-action: manipulation
+    // 4. 防止雙擊縮放 (Double Tap Zoom)
+    let lastTouchEnd = 0;
+    const preventDoubleTapZoom = (e) => {
+      const now = (new Date()).getTime();
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    };
+    document.addEventListener('touchend', preventDoubleTapZoom, false);
 
     return () => {
+      document.removeEventListener('touchstart', preventMultiTouch);
+      document.removeEventListener('touchmove', preventMultiTouch);
       document.removeEventListener('gesturestart', preventGestureZoom);
+      document.removeEventListener('gesturechange', preventGestureZoom);
+      document.removeEventListener('gestureend', preventGestureZoom);
+      document.removeEventListener('touchend', preventDoubleTapZoom);
     };
   }, []);
-  // --- 禁止縮放的核心邏輯 (End) ---
+  // --- 禁止縮放 (強制攔截版) (End) ---
 
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState('catalog');
@@ -657,11 +685,15 @@ export default function App() {
         ::-webkit-scrollbar-thumb{background:#C29591;border-radius:3px}
         html{overflow-y:scroll}
         .hide-scrollbar::-webkit-scrollbar{display:none}
-        /* 禁止縮放與字體調整的核心 CSS */
+        
+        /* 強制禁止縮放的核心 CSS 
+          pan-x pan-y: 瀏覽器只處理平移(滾動)，完全忽略縮放手勢
+        */
         html, body {
-            touch-action: manipulation;
+            touch-action: pan-x pan-y; 
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
+            overscroll-behavior: none; /* 防止橡皮筋效果帶來的縮放感 */
         }
       `}</style>
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-[500] border-b border-[#EAE7E2]">
