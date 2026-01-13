@@ -198,7 +198,7 @@ const ManagerModal = ({ isOpen, close, settings, setSettings, bookings, items, o
   if (!isOpen) return null;
   const update = (k, v) => setSettings(p => ({ ...p, [k]: v }));
   const save = async (newS) => await setDoc(doc(db, 'artifacts', appId, 'public', 'settings'), newS);
-  
+   
   const addStore = () => { if(inputs.store) { const ns={...settings, stores:[...settings.stores, {id:Date.now().toString(), name:inputs.store, cleaningTime:20}]}; save(ns); setInputs({...inputs, store:''}); }};
   const addCat = () => { if(inputs.cat && !settings.styleCategories.includes(inputs.cat)) { const ns={...settings, styleCategories:[...settings.styleCategories, inputs.cat]}; save(ns); setInputs({...inputs, cat:''}); }};
   const addTag = () => { if(inputs.tag && !settings.savedTags.includes(inputs.tag)) { const ns={...settings, savedTags:[...settings.savedTags, inputs.tag]}; save(ns); setInputs({...inputs, tag:''}); }};
@@ -219,44 +219,44 @@ const ManagerModal = ({ isOpen, close, settings, setSettings, bookings, items, o
         </div>
         <div className="flex-1 overflow-y-auto p-8 space-y-8">
           {tab === 'stores' && <div className="space-y-6">
-             <div className="flex gap-2"><input className="border p-2 text-xs flex-1" placeholder="新門市" value={inputs.store} onChange={e=>setInputs({...inputs, store:e.target.value})}/><Btn onClick={addStore} className="bg-[#463E3E] text-white px-4 text-xs">新增</Btn></div>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{settings.stores.map(s=><div key={s.id} className="border p-4 bg-white shadow-sm flex flex-col gap-2"><div className="flex justify-between font-bold text-sm text-[#463E3E]"><span>{s.name}</span><Btn onClick={()=>{confirm('刪除?')&&save({...settings, stores:settings.stores.filter(x=>x.id!==s.id)})}}><Trash2 size={14}/></Btn></div><div className="text-xs text-gray-400 flex items-center gap-1">整備 <input type="number" defaultValue={s.cleaningTime||20} onBlur={e=>{const ns={...settings, stores:settings.stores.map(x=>x.id===s.id?{...x, cleaningTime:Number(e.target.value)}:x)}; save(ns);}} className="w-10 border text-center"/> 分</div></div>)}</div>
+              <div className="flex gap-2"><input className="border p-2 text-xs flex-1" placeholder="新門市" value={inputs.store} onChange={e=>setInputs({...inputs, store:e.target.value})}/><Btn onClick={addStore} className="bg-[#463E3E] text-white px-4 text-xs">新增</Btn></div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{settings.stores.map(s=><div key={s.id} className="border p-4 bg-white shadow-sm flex flex-col gap-2"><div className="flex justify-between font-bold text-sm text-[#463E3E]"><span>{s.name}</span><Btn onClick={()=>{confirm('刪除?')&&save({...settings, stores:settings.stores.filter(x=>x.id!==s.id)})}}><Trash2 size={14}/></Btn></div><div className="text-xs text-gray-400 flex items-center gap-1">整備 <input type="number" defaultValue={s.cleaningTime||20} onBlur={e=>{const ns={...settings, stores:settings.stores.map(x=>x.id===s.id?{...x, cleaningTime:Number(e.target.value)}:x)}; save(ns);}} className="w-10 border text-center"/> 分</div></div>)}</div>
           </div>}
           {tab === 'attrs' && <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-             <div className="space-y-4">
-               <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">風格分類</h4>
-               <div className="flex gap-2"><input className="border p-2 text-xs flex-1" value={inputs.cat} onChange={e=>setInputs({...inputs, cat:e.target.value})}/><Btn onClick={addCat} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn></div>
-               <div className="flex flex-wrap gap-2">{settings.styleCategories.map(c=><span key={c} className="bg-[#FAF9F6] border px-3 py-2 text-xs relative group">{c}<Btn onClick={()=>confirm('刪除?')&&save({...settings, styleCategories:settings.styleCategories.filter(x=>x!==c)})} className="absolute -top-2 -right-2 bg-red-400 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100"><X size={10}/></Btn></span>)}</div>
-             </div>
-             <div className="space-y-4">
-               <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">標籤</h4>
-               <div className="flex gap-2"><input className="border p-2 text-xs flex-1" value={inputs.tag} onChange={e=>setInputs({...inputs, tag:e.target.value})}/><Btn onClick={addTag} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn></div>
-               <div className="flex flex-wrap gap-2">{settings.savedTags.map(t=><span key={t} className="bg-gray-50 border px-3 py-1 rounded-full text-xs relative group">#{t}<Btn onClick={()=>save({...settings, savedTags:settings.savedTags.filter(x=>x!==t)})} className="absolute -top-1 -right-1 bg-red-400 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100"><X size={8}/></Btn></span>)}</div>
-             </div>
-             <div className="space-y-4">
-               <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">加購項目</h4>
-               <form onSubmit={addAddon} className="bg-gray-50 p-3 border space-y-2"><input placeholder="名稱" className="w-full border p-2 text-xs" value={inputs.addon.name} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, name:e.target.value}})}/><div className="flex gap-2"><input placeholder="$" type="number" className="w-1/2 border p-2 text-xs" value={inputs.addon.p} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, p:e.target.value}})}/><input placeholder="分" type="number" className="w-1/2 border p-2 text-xs" value={inputs.addon.d} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, d:e.target.value}})}/></div><Btn type="submit" className="w-full bg-[#463E3E] text-white py-1 text-xs">新增</Btn></form>
-             </div>
+              <div className="space-y-4">
+                <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">風格分類</h4>
+                <div className="flex gap-2"><input className="border p-2 text-xs flex-1" value={inputs.cat} onChange={e=>setInputs({...inputs, cat:e.target.value})}/><Btn onClick={addCat} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn></div>
+                <div className="flex flex-wrap gap-2">{settings.styleCategories.map(c=><span key={c} className="bg-[#FAF9F6] border px-3 py-2 text-xs relative group">{c}<Btn onClick={()=>confirm('刪除?')&&save({...settings, styleCategories:settings.styleCategories.filter(x=>x!==c)})} className="absolute -top-2 -right-2 bg-red-400 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100"><X size={10}/></Btn></span>)}</div>
+              </div>
+              <div className="space-y-4">
+                <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">標籤</h4>
+                <div className="flex gap-2"><input className="border p-2 text-xs flex-1" value={inputs.tag} onChange={e=>setInputs({...inputs, tag:e.target.value})}/><Btn onClick={addTag} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn></div>
+                <div className="flex flex-wrap gap-2">{settings.savedTags.map(t=><span key={t} className="bg-gray-50 border px-3 py-1 rounded-full text-xs relative group">#{t}<Btn onClick={()=>save({...settings, savedTags:settings.savedTags.filter(x=>x!==t)})} className="absolute -top-1 -right-1 bg-red-400 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100"><X size={8}/></Btn></span>)}</div>
+              </div>
+              <div className="space-y-4">
+                <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">加購項目</h4>
+                <form onSubmit={addAddon} className="bg-gray-50 p-3 border space-y-2"><input placeholder="名稱" className="w-full border p-2 text-xs" value={inputs.addon.name} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, name:e.target.value}})}/><div className="flex gap-2"><input placeholder="$" type="number" className="w-1/2 border p-2 text-xs" value={inputs.addon.p} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, p:e.target.value}})}/><input placeholder="分" type="number" className="w-1/2 border p-2 text-xs" value={inputs.addon.d} onChange={e=>setInputs({...inputs, addon:{...inputs.addon, d:e.target.value}})}/></div><Btn type="submit" className="w-full bg-[#463E3E] text-white py-1 text-xs">新增</Btn></form>
+              </div>
           </div>}
           {tab === 'staff' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-             <div className="space-y-4">
-                <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-2"><h4 className="font-bold text-sm">人員名單</h4><Btn onClick={()=>{const n=prompt('姓名?'); n && save({...settings, staff:[...settings.staff, {id:Date.now().toString(), name:n, storeId:settings.stores[0]?.id, leaveDates:[]}]})}} className="text-[10px] bg-[#C29591] text-white px-3 py-1 rounded-full">+ 新增</Btn></div>
-                {settings.staff.map(s=><div key={s.id} className="border p-4 bg-gray-50 space-y-2"><div className="flex justify-between font-bold text-xs"><span>{s.name}</span><select value={s.storeId} onChange={e=>save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, storeId:e.target.value}:x)})} className="ml-2 border">{settings.stores.map(st=><option key={st.id} value={st.id}>{st.name}</option>)}</select><Btn onClick={()=>confirm('刪除?')&&save({...settings, staff:settings.staff.filter(x=>x.id!==s.id)})}><Trash2 size={14}/></Btn></div><div className="border-t pt-2"><label className="text-[10px] text-gray-400">休假: </label><input type="date" className="text-[10px] border p-1" onChange={e=>{if(e.target.value) save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, leaveDates:[...x.leaveDates, e.target.value].sort()}:x)})}}/><div className="flex flex-wrap gap-1 mt-1">{s.leaveDates.map(d=><span key={d} className="text-[9px] bg-white border px-1 flex items-center gap-1">{d}<X size={8} onClick={()=>save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, leaveDates:x.leaveDates.filter(l=>l!==d)}:x)})}/></span>)}</div></div></div>)}
-             </div>
-             <div className="space-y-4">
-                <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">公休日</h4>
-                <div className="flex gap-2 bg-gray-50 p-2 border"><select className="text-xs border" value={inputs.hStore} onChange={e=>setInputs({...inputs, hStore:e.target.value})}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 text-xs border p-1" value={inputs.hDate} onChange={e=>setInputs({...inputs, hDate:e.target.value})}/><Btn onClick={addHoliday} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn></div>
-                <div className="flex flex-wrap gap-2">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] border px-2 py-1 bg-white flex items-center gap-1">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name})<X size={10} onClick={()=>save({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
-             </div>
+              <div className="space-y-4">
+                 <div className="flex justify-between items-center border-l-4 border-[#C29591] pl-2"><h4 className="font-bold text-sm">人員名單</h4><Btn onClick={()=>{const n=prompt('姓名?'); n && save({...settings, staff:[...settings.staff, {id:Date.now().toString(), name:n, storeId:settings.stores[0]?.id, leaveDates:[]}]})}} className="text-[10px] bg-[#C29591] text-white px-3 py-1 rounded-full">+ 新增</Btn></div>
+                 {settings.staff.map(s=><div key={s.id} className="border p-4 bg-gray-50 space-y-2"><div className="flex justify-between font-bold text-xs"><span>{s.name}</span><select value={s.storeId} onChange={e=>save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, storeId:e.target.value}:x)})} className="ml-2 border">{settings.stores.map(st=><option key={st.id} value={st.id}>{st.name}</option>)}</select><Btn onClick={()=>confirm('刪除?')&&save({...settings, staff:settings.staff.filter(x=>x.id!==s.id)})><Trash2 size={14}/></Btn></div><div className="border-t pt-2"><label className="text-[10px] text-gray-400">休假: </label><input type="date" className="text-[10px] border p-1" onChange={e=>{if(e.target.value) save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, leaveDates:[...x.leaveDates, e.target.value].sort()}:x)})}}/><div className="flex flex-wrap gap-1 mt-1">{s.leaveDates.map(d=><span key={d} className="text-[9px] bg-white border px-1 flex items-center gap-1">{d}<X size={8} onClick={()=>save({...settings, staff:settings.staff.map(x=>x.id===s.id?{...x, leaveDates:x.leaveDates.filter(l=>l!==d)}:x)})}/></span>)}</div></div></div>)}
+              </div>
+              <div className="space-y-4">
+                 <h4 className="font-bold text-sm border-l-4 border-[#C29591] pl-2">公休日</h4>
+                 <div className="flex gap-2 bg-gray-50 p-2 border"><select className="text-xs border" value={inputs.hStore} onChange={e=>setInputs({...inputs, hStore:e.target.value})}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 text-xs border p-1" value={inputs.hDate} onChange={e=>setInputs({...inputs, hDate:e.target.value})}/><Btn onClick={addHoliday} className="bg-[#463E3E] text-white px-3 text-xs">新增</Btn></div>
+                 <div className="flex flex-wrap gap-2">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] border px-2 py-1 bg-white flex items-center gap-1">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name})<X size={10} onClick={()=>save({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
+              </div>
           </div>}
           {tab === 'bookings' && <div className="h-full flex flex-col space-y-4">
-             <div className="flex justify-between border-b pb-2 items-center">
-               <div className="flex gap-2 items-center"><Filter size={14}/><select className="text-xs border-none outline-none font-bold" value={adminFilter.store} onChange={e=>setAdminFilter({...adminFilter, store:e.target.value})}><option value="all">全部分店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-               <div className="flex gap-1"><Btn onClick={()=>setAdminFilter({...adminFilter, mode:'list'})} className={`p-1 rounded ${adminFilter.mode==='list'?'bg-gray-200':''}`}><ListIcon size={16}/></Btn><Btn onClick={()=>setAdminFilter({...adminFilter, mode:'cal'})} className={`p-1 rounded ${adminFilter.mode==='cal'?'bg-gray-200':''}`}><Grid size={16}/></Btn></div>
-             </div>
-             {adminFilter.mode === 'list' ? <div className="space-y-2 overflow-y-auto">{filteredBookings.map(b=><div key={b.id} className="border p-3 flex justify-between bg-[#FAF9F6] text-xs hover:border-[#C29591]"><div><div className="font-bold mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="border px-1 text-gray-400 font-normal">{b.storeName}</span></div><div>{b.name} | {b.phone}</div><div className="text-gray-400">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><Btn onClick={()=>confirm('取消?')&&onDeleteBooking(b.id)}><Trash2 size={16} className="text-gray-300 hover:text-red-500"/></Btn></div>)}</div> : 
-             <div className="flex flex-col md:flex-row gap-4 h-full"><CalendarBase dateStr={adminFilter.date} renderDay={(d,ds)=>{ const has=filteredBookings.some(x=>x.date===ds); return <Btn key={d} onClick={()=>setAdminFilter({...adminFilter, date:ds})} className={`w-full aspect-square text-xs border flex flex-col items-center justify-center ${adminFilter.date===ds?'bg-[#FAF9F6] border-[#C29591] font-bold':''}`}>{d}{has&&<span className="w-1 h-1 rounded-full bg-red-400"/>}</Btn>}} maxDays={null}/>
-               <div className="flex-1 overflow-y-auto space-y-2 border-l pl-4"><h5 className="font-bold text-xs mb-2">{adminFilter.date}</h5>{dateBookings.map(b=><div key={b.id} className="border p-2 text-xs relative overflow-hidden"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"/><div className="flex justify-between pl-2"><span className="font-bold">{b.time} {b.name}</span><span className="text-[#C29591]">${b.totalAmount}</span></div><div className="pl-2 text-gray-400">{b.itemTitle}</div></div>)}</div></div>}
+              <div className="flex justify-between border-b pb-2 items-center">
+                <div className="flex gap-2 items-center"><Filter size={14}/><select className="text-xs border-none outline-none font-bold" value={adminFilter.store} onChange={e=>setAdminFilter({...adminFilter, store:e.target.value})}><option value="all">全部分店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+                <div className="flex gap-1"><Btn onClick={()=>setAdminFilter({...adminFilter, mode:'list'})} className={`p-1 rounded ${adminFilter.mode==='list'?'bg-gray-200':''}`}><ListIcon size={16}/></Btn><Btn onClick={()=>setAdminFilter({...adminFilter, mode:'cal'})} className={`p-1 rounded ${adminFilter.mode==='cal'?'bg-gray-200':''}`}><Grid size={16}/></Btn></div>
+              </div>
+              {adminFilter.mode === 'list' ? <div className="space-y-2 overflow-y-auto">{filteredBookings.map(b=><div key={b.id} className="border p-3 flex justify-between bg-[#FAF9F6] text-xs hover:border-[#C29591]"><div><div className="font-bold mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="border px-1 text-gray-400 font-normal">{b.storeName}</span></div><div>{b.name} | {b.phone}</div><div className="text-gray-400">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><Btn onClick={()=>confirm('取消?')&&onDeleteBooking(b.id)}><Trash2 size={16} className="text-gray-300 hover:text-red-500"/></Btn></div>)}</div> : 
+              <div className="flex flex-col md:flex-row gap-4 h-full"><CalendarBase dateStr={adminFilter.date} renderDay={(d,ds)=>{ const has=filteredBookings.some(x=>x.date===ds); return <Btn key={d} onClick={()=>setAdminFilter({...adminFilter, date:ds})} className={`w-full aspect-square text-xs border flex flex-col items-center justify-center ${adminFilter.date===ds?'bg-[#FAF9F6] border-[#C29591] font-bold':''}`}>{d}{has&&<span className="w-1 h-1 rounded-full bg-red-400"/>}</Btn>}} maxDays={null}/>
+                <div className="flex-1 overflow-y-auto space-y-2 border-l pl-4"><h5 className="font-bold text-xs mb-2">{adminFilter.date}</h5>{dateBookings.map(b=><div key={b.id} className="border p-2 text-xs relative overflow-hidden"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"/><div className="flex justify-between pl-2"><span className="font-bold">{b.time} {b.name}</span><span className="text-[#C29591]">${b.totalAmount}</span></div><div className="pl-2 text-gray-400">{b.itemTitle}</div></div>)}</div></div>}
           </div>}
         </div>
       </div>
@@ -276,7 +276,7 @@ const UploadModal = ({ isOpen, close, item, settings, onSubmit, isUploading }) =
     setFiles(p => [...p, ...fs]);
     setF(p => ({...p, images: [...p.images, ...fs.map(file=>URL.createObjectURL(file))]}));
   };
-  
+   
   return (
     <div className="fixed inset-0 bg-black/40 z-[1000] flex items-center justify-center p-4">
       <div className="bg-white p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -308,16 +308,47 @@ export default function App() {
   const [search, setSearch] = useState({ kw: '', res: [] });
   const [loading, setLoading] = useState(false);
 
+  // --- FIX START: 解決無限迴圈與白屏問題的核心修改 ---
+  
+  // 1. 處理使用者登入 (僅在元件掛載時執行一次)
   useEffect(() => {
-    signInAnonymously(auth); onAuthStateChanged(auth, setUser);
-    const sub = (path, fn) => onSnapshot(path.includes('/') ? doc(db, ...path.split('/')) : collection(db, ...path.split('/')), fn);
-    if (user) {
-      sub('artifacts/uniwawa01/public/settings', s => s.exists() && setSettings(p => ({ ...p, ...s.data() })));
-      sub('artifacts/uniwawa01/public/data/nail_designs', s => setData(p => ({ ...p, items: s.docs.map(d => ({ id: d.id, ...d.data() })) })));
-      sub('artifacts/uniwawa01/public/data/addons', s => setData(p => ({ ...p, addons: s.docs.map(d => ({ id: d.id, ...d.data() })) })));
-      onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), orderBy('createdAt', 'desc')), s => setData(p => ({ ...p, bookings: s.docs.map(d => ({ id: d.id, ...d.data() })) })));
-    }
+    signInAnonymously(auth);
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe(); // 清理監聽
+  }, []); // 依賴為空陣列，確保只跑一次
+
+  // 2. 處理資料監聽 (當 user 狀態確立後執行，並負責清理舊的監聽)
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubs = []; // 儲存所有 onSnapshot 的取消函式
+
+    const sub = (path, fn) => {
+      // 根據路徑判斷是 doc 還是 collection
+      const ref = path.includes('/') && path.split('/').length % 2 === 0 
+        ? doc(db, ...path.split('/')) 
+        : collection(db, ...path.split('/'));
+      
+      const unsub = onSnapshot(ref, fn);
+      unsubs.push(unsub);
+    };
+
+    // 建立監聽
+    sub('artifacts/uniwawa01/public/settings', s => s.exists() && setSettings(p => ({ ...p, ...s.data() })));
+    sub('artifacts/uniwawa01/public/data/nail_designs', s => setData(p => ({ ...p, items: s.docs.map(d => ({ id: d.id, ...d.data() })) })));
+    sub('artifacts/uniwawa01/public/data/addons', s => setData(p => ({ ...p, addons: s.docs.map(d => ({ id: d.id, ...d.data() })) })));
+    
+    // 預約資料需排序，使用 query
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), orderBy('createdAt', 'desc'));
+    unsubs.push(onSnapshot(q, s => setData(p => ({ ...p, bookings: s.docs.map(d => ({ id: d.id, ...d.data() })) }))));
+
+    // 清理函式：當 user 改變或元件卸載時，取消所有監聽，釋放記憶體
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
   }, [user]);
+
+  // --- FIX END ---
 
   const toggleModal = (k, v = true) => setModals(p => ({ ...p, [k]: v }));
   const openUpload = (i = null) => { setEditItem(i); toggleModal('upload'); };
@@ -338,7 +369,7 @@ export default function App() {
     const total = (Number(item?.price)||0) + (Number(addon?.price)||0);
     const dur = (Number(item?.duration)||90) + (Number(addon?.duration)||0);
     const storeName = settings.stores.find(s => s.id === bd.storeId)?.name || '未指定';
-    
+     
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), { ...bd, storeName, itemTitle: item.title, addonName: addon?.name||'無', totalAmount: total, totalDuration: dur, createdAt: serverTimestamp() });
       await emailjs.send('service_uniwawa', 'template_d5tq1z9', { to_email: bd.email, to_name: bd.name, phone: bd.phone, store_name: storeName, booking_date: bd.date, booking_time: bd.time, item_title: item.title, addon_name: addon?.name||'無', total_amount: total, total_duration: dur, notice_content: NOTICE_TEXT }, 'ehbGdRtZaXWft7qLM');
