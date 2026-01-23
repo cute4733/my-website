@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -54,6 +54,7 @@ const TIME_SLOTS = generateTimeSlots();
 const timeToMin = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
+// --- 元件：風格卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
   const [idx, setIdx] = useState(0);
   const [addonId, setAddonId] = useState('');
@@ -108,6 +109,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
   );
 };
 
+// --- 元件：前台日曆 ---
 const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId, isDayFull }) => {
   const [viewDate, setViewDate] = useState(selectedDate ? new Date(selectedDate) : new Date());
   const year = viewDate.getFullYear();
@@ -147,6 +149,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
   );
 };
 
+// --- 元件：後台日曆 ---
 const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const year = viewDate.getFullYear(); 
@@ -174,7 +177,6 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
     );
   }
 
-  // 修改2: 再次縮小寬度 max-w-[210px]，移除 aspect-square 改用固定高度 h-7，節省手機版空間
   return (
     <div className="w-full max-w-[210px] mx-auto bg-white border border-[#EAE7E2] p-2 shadow-sm">
       <div className="flex justify-between items-center mb-2 px-1">
@@ -190,41 +192,123 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   );
 };
 
+// --- 元件：後台甘特圖 (時況) ---
+const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
+    const today = getTodayStr();
+    // 雖然只顯示「當日」，但保留 date 參數擴充性
+    const targetDate = date || today; 
+
+    const checkAvailability = (storeId, time) => {
+        // 1. 檢查是否為過去時間 (如果是今天)
+        if (targetDate === today) {
+            const now = new Date();
+            const slotTime = new Date(`${targetDate} ${time}`);
+            if (slotTime < now) return 'past';
+        }
+
+        // 2. 檢查該店該日總人力
+        const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(storeId));
+        // 扣除當日請假人員
+        const activeStaffCount = storeStaff.filter(s => !(s.leaveDates || []).includes(targetDate)).length;
+        
+        if (activeStaffCount === 0) return 'full'; // 無人上班
+
+        // 3. 計算該時段佔用人數
+        // 必須考慮：每個預約的 (開始時間) ~ (開始時間 + 總時長 + 整備時間) 是否覆蓋此 time slot
+        const slotMin = timeToMin(time);
+        
+        const occupiedCount = bookings.filter(b => {
+            if (String(b.storeId) !== String(storeId) || b.date !== targetDate) return false;
+            const bStart = timeToMin(b.time);
+            const duration = Number(b.totalDuration) || 90;
+            const clean = Number(settings.stores.find(s=>s.id===storeId)?.cleaningTime) || 20;
+            const bEnd = bStart + duration + clean;
+            // 如果時間重疊 (Slot 在預約區間內)
+            // Slot time (start) < Booking End AND Slot Time + 10 > Booking Start
+            return (slotMin < bEnd) && (slotMin + 10 > bStart); 
+        }).length;
+
+        return occupiedCount >= activeStaffCount ? 'full' : 'available';
+    };
+
+    return (
+        <div className="h-full flex flex-col bg-white border border-[#EAE7E2] overflow-hidden">
+             <div className="p-4 border-b bg-[#FAF9F6] flex justify-between items-center">
+                <div className="flex gap-2 items-center">
+                    <BarChart3 size={16} className="text-[#C29591]"/>
+                    <span className="text-xs font-bold tracking-widest text-[#463E3E]">{targetDate} 時況總覽</span>
+                </div>
+                <div className="flex gap-2 text-[9px]">
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200"></div>可預約</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 relative overflow-hidden"><div className="absolute inset-0 border-t border-red-300 -rotate-45"></div></div>滿額/休</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-100"></div>已過</span>
+                </div>
+             </div>
+             <div className="flex-1 overflow-auto">
+                <div className="min-w-[600px]"> {/* 強制橫向捲動以容納時間軸 */}
+                    <div className="flex border-b sticky top-0 bg-white z-10">
+                        <div className="w-24 flex-shrink-0 p-2 text-[10px] font-bold text-center border-r bg-[#FAF9F6]">門市</div>
+                        <div className="flex-1 flex">
+                            {TIME_SLOTS.map((t, i) => {
+                                // 簡化顯示，只顯示整點
+                                const showLabel = t.endsWith('00');
+                                return (
+                                    <div key={t} className={`flex-1 min-w-[30px] text-[9px] text-center border-r text-gray-400 py-2 ${showLabel?'font-bold text-[#463E3E]':''}`}>
+                                        {showLabel ? t.split(':')[0] : ''}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    {settings.stores.map(store => (
+                        <div key={store.id} className="flex border-b h-16 group hover:bg-gray-50">
+                            <div className="w-24 flex-shrink-0 p-2 text-[10px] font-bold border-r flex items-center justify-center bg-[#FAF9F6] group-hover:bg-[#FAF9F6]">
+                                {store.name}
+                            </div>
+                            <div className="flex-1 flex relative">
+                                {TIME_SLOTS.map(t => {
+                                    const status = checkAvailability(store.id, t);
+                                    let bgClass = 'bg-green-50 hover:bg-green-100 cursor-pointer'; // Available
+                                    if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300'; // Full pattern done via CSS or simplified
+                                    if (status === 'past') bgClass = 'bg-gray-100 cursor-not-allowed';
+
+                                    return (
+                                        <div 
+                                            key={t} 
+                                            onClick={() => status === 'available' && onTimeClick && onTimeClick(store.id, t)}
+                                            className={`flex-1 min-w-[30px] border-r border-dashed border-gray-100 h-full transition-colors ${bgClass} relative`}
+                                            title={`${t} ${status}`}
+                                        >
+                                            {status === 'full' && <div className="absolute inset-0 border-l border-red-200 rotate-45 transform scale-150 origin-center opacity-30"></div>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+             </div>
+        </div>
+    );
+};
+
+
 export default function App() {
   // --- 禁止縮放的核心邏輯 (Start) ---
   useEffect(() => {
-    // 1. 強制設定 Meta Viewport
     const metaTagId = 'viewport-meta-no-zoom';
     let meta = document.getElementById(metaTagId);
-    if (!meta) {
-      meta = document.querySelector('meta[name="viewport"]');
-    }
-    
-    // 設定 content 禁止 user-scalable
+    if (!meta) meta = document.querySelector('meta[name="viewport"]');
     const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-    
-    if (meta) {
-      meta.content = content;
-    } else {
+    if (meta) meta.content = content;
+    else {
       const newMeta = document.createElement('meta');
-      newMeta.name = 'viewport';
-      newMeta.id = metaTagId;
-      newMeta.content = content;
+      newMeta.name = 'viewport'; newMeta.id = metaTagId; newMeta.content = content;
       document.head.appendChild(newMeta);
     }
-
-    // 2. 阻擋 iOS Safari 雙指縮放手勢 (Gesture Start)
-    const preventGestureZoom = (e) => {
-      e.preventDefault();
-    };
+    const preventGestureZoom = (e) => e.preventDefault();
     document.addEventListener('gesturestart', preventGestureZoom);
-
-    // 3. (Optional) 阻擋雙擊縮放 - 雖然 CSS touch-action 已經處理，但 JS 可做雙重保險
-    // 這裡我們主要依賴下方的 CSS touch-action: manipulation
-
-    return () => {
-      document.removeEventListener('gesturestart', preventGestureZoom);
-    };
+    return () => document.removeEventListener('gesturestart', preventGestureZoom);
   }, []);
   // --- 禁止縮放的核心邏輯 (End) ---
 
@@ -236,12 +320,8 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   
   const [settings, setSettings] = useState({ 
-      stores: [], 
-      staff: [], 
-      holidays: [], 
-      styleCategories: CONSTANTS.CATS, 
-      savedTags: [],
-      blacklist: []
+      stores: [], staff: [], holidays: [], 
+      styleCategories: CONSTANTS.CATS, savedTags: [], blacklist: []
   });
   
   const [inputs, setInputs] = useState({ holiday: { date: '', storeId: 'all' }, store: '', category: '', tag: '', addon: { name: '', price: '', duration: '' }, pwd: '', blacklistPhone: '' });
@@ -359,22 +439,29 @@ export default function App() {
   };
 
   const handleExportCSV = () => {
+      // 修正: 使用更精準的 Date 物件比對，避免純字串比對或時區問題導致漏單
       const today = new Date();
       
-      // 修改1: 使用本地時間計算前30天與後30天
-      const dStart = new Date(today); dStart.setDate(today.getDate() - 30);
-      const dEnd = new Date(today); dEnd.setDate(today.getDate() + 30);
+      // 設定起始日為 30 天前的 00:00:00
+      const start = new Date(today);
+      start.setDate(today.getDate() - 30);
+      start.setHours(0, 0, 0, 0);
 
-      // 修改1: 轉換為 YYYY-MM-DD 字串以進行精確的字串比對，避免時區導致漏單
-      const toDateStr = (d) => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      const startStr = toDateStr(dStart);
-      const endStr = toDateStr(dEnd);
+      // 設定結束日為 30 天後的 23:59:59
+      const end = new Date(today);
+      end.setDate(today.getDate() + 30);
+      end.setHours(23, 59, 59, 999);
       
       const targetBookings = bookings.filter(b => {
           const storeMatch = adminSel.store === 'all' || String(b.storeId) === String(adminSel.store);
           if(!storeMatch) return false;
-          // 修改1: 直接比對日期字串
-          return b.date >= startStr && b.date <= endStr;
+          
+          // 將預約日期字串 (YYYY-MM-DD) 轉為 Date 物件進行比對
+          const bDate = new Date(b.date);
+          // 確保 bDate 時間設為 00:00:00 以進行公平比對
+          bDate.setHours(0,0,0,0);
+
+          return bDate.getTime() >= start.getTime() && bDate.getTime() <= end.getTime();
       });
 
       const formatTimestamp = (ts) => {
@@ -685,6 +772,10 @@ export default function App() {
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
         }
+        .pattern-diagonal-lines-sm {
+            background-image: repeating-linear-gradient(45deg, #fca5a5 0, #fca5a5 1px, transparent 0, transparent 50%);
+            background-size: 10px 10px;
+        }
       `}</style>
       <nav className="fixed top-0 w-full bg-white/90 backdrop-blur-md z-[500] border-b border-[#EAE7E2]">
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between">
@@ -704,7 +795,7 @@ export default function App() {
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
-              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
+              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'availability',l:'時況',i:<BarChart3 size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {mgrTab === 'stores' && <div className="space-y-6">
@@ -736,17 +827,23 @@ export default function App() {
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-3 border"><select className="text-xs border p-2" value={inputs.holiday.storeId} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,storeId:e.target.value}}))}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 p-2 border text-xs" value={inputs.holiday.date} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,date:e.target.value}}))}/><button onClick={()=>{if(inputs.holiday.date) saveSettings({...settings, holidays:[...settings.holidays, inputs.holiday]})}} className="bg-[#463E3E] text-white px-4 py-2 text-[10px]">新增</button></div><div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex gap-2">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name}) <X size={12} className="cursor-pointer" onClick={()=>saveSettings({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
                 </div>
               </div>}
+
+              {mgrTab === 'availability' && <div className="h-full">
+                  <AvailabilityGantt settings={settings} bookings={bookings} />
+              </div>}
               
               {mgrTab === 'bookings' && <div className="h-full flex flex-col space-y-4">
                 <div className="flex justify-between border-b pb-4">
                     <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">預約訂單管理</h4><p className="text-[10px] text-gray-400 mt-1">查看與管理顧客預約(近三月內預約)</p></div>
-                    <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded"><Filter size={14}/><select className="text-xs bg-transparent" value={adminSel.store} onChange={e=>setAdminSel(p=>({...p, store:e.target.value}))}><option value="all">全店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><div className="w-[1px] h-6 bg-gray-300 mx-1"></div><button onClick={()=>setViewMode('list')} className={`p-2 ${viewMode==='list'?'bg-white shadow text-[#C29591]':''}`}><ListIcon size={16}/></button><button onClick={()=>{setViewMode('calendar');setAdminSel(p=>({...p, date:getTodayStr()}))}} className={`p-2 ${viewMode==='calendar'?'bg-white shadow text-[#C29591]':''}`}><Grid size={16}/></button><button onClick={handleExportCSV} className="p-2"><Download size={16}/></button></div>
+                    <div className="flex gap-2 items-center bg-[#FAF9F6] p-1 rounded">
+                        <Filter size={14}/>
+                        <select className="text-xs bg-transparent" value={adminSel.store} onChange={e=>setAdminSel(p=>({...p, store:e.target.value}))}><option value="all">全店</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><div className="w-[1px] h-6 bg-gray-300 mx-1"></div><button onClick={()=>setViewMode('list')} className={`p-2 ${viewMode==='list'?'bg-white shadow text-[#C29591]':''}`}><ListIcon size={16}/></button><button onClick={()=>{setViewMode('calendar');setAdminSel(p=>({...p, date:getTodayStr()}))}} className={`p-2 ${viewMode==='calendar'?'bg-white shadow text-[#C29591]':''}`}><Grid size={16}/></button><button onClick={handleExportCSV} className="p-2"><Download size={16}/></button></div>
                 </div>
-                {viewMode === 'list' ? <div className="flex-1 overflow-y-auto pr-2 space-y-3">{listBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={16}/></button></div>)}</div> : 
+                {viewMode === 'list' ? <div className="flex-1 overflow-y-auto pr-2 space-y-3">{listBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><div className="flex gap-2 items-start"><button onClick={()=>handleDeleteBooking(b.id)} className="p-1.5 bg-white border hover:bg-gray-100 rounded text-red-400"><Trash2 size={14}/></button></div></div>)}</div> : 
                 <div className="flex flex-col md:flex-row gap-6 h-full"><div className="w-full md:w-64 flex-shrink-0"><AdminBookingCalendar bookings={storeBookings} selectedDate={adminSel.date} onDateSelect={d=>setAdminSel(p=>({...p, date:d}))}/></div>
                 <div className="flex-1 overflow-y-auto space-y-2 p-2 bg-[#FAF9F6] border border-dashed min-h-0 md:h-full">
                     <h5 className="text-xs font-bold text-[#463E3E] sticky top-0 bg-[#FAF9F6] pb-2 border-b border-gray-200">{adminSel.date} 預約</h5>
-                    {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
+                    {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><div className="flex gap-2"><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
                 </div></div>}
               </div>}
 
