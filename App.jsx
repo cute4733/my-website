@@ -166,24 +166,25 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
     const isSelected = selectedDate === dateStr;
     days.push(
       <button key={d} onClick={() => onDateSelect(dateStr)}
-        className={`w-full aspect-square text-xs rounded-lg flex flex-col items-center justify-center gap-1 transition-all border
+        className={`w-full aspect-square text-[10px] rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all border
         ${isSelected ? 'border-[#C29591] bg-[#FAF9F6] text-[#C29591] font-bold' : 'border-transparent hover:bg-gray-50'}`}>
         <span>{d}</span>
-        {hasBooking && <span className="w-1.5 h-1.5 rounded-full bg-[#C29591]"></span>}
+        {hasBooking && <span className="w-1 h-1 rounded-full bg-[#C29591]"></span>}
       </button>
     );
   }
 
+  // 修改: 縮小容器最大寬度 (max-w-[260px])，縮小 padding 和字體，以利在手機版顯示下方列表
   return (
-    <div className="w-full max-w-sm mx-auto bg-white border border-[#EAE7E2] p-4 shadow-sm">
-      <div className="flex justify-between items-center mb-6 px-2">
-        <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">{year}年 {month + 1}月</h4>
+    <div className="w-full max-w-[260px] mx-auto bg-white border border-[#EAE7E2] p-2 shadow-sm">
+      <div className="flex justify-between items-center mb-4 px-1">
+        <h4 className="text-xs font-bold tracking-widest text-[#463E3E]">{year}年 {month + 1}月</h4>
         <div className="flex gap-2">
-          <button onClick={() => setViewDate(new Date(year, month - 1, 1))}><ChevronLeft size={18}/></button>
-          <button onClick={() => setViewDate(new Date(year, month + 1, 1))}><ChevronRight size={18}/></button>
+          <button onClick={() => setViewDate(new Date(year, month - 1, 1))}><ChevronLeft size={16}/></button>
+          <button onClick={() => setViewDate(new Date(year, month + 1, 1))}><ChevronRight size={16}/></button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 mb-2">{CONSTANTS.DAYS.map(w => <div key={w} className="h-10 flex items-center justify-center text-[10px] text-gray-400 font-bold">{w}</div>)}</div>
+      <div className="grid grid-cols-7 gap-1 mb-1">{CONSTANTS.DAYS.map(w => <div key={w} className="h-6 flex items-center justify-center text-[10px] text-gray-400 font-bold">{w}</div>)}</div>
       <div className="grid grid-cols-7 gap-1">{days}</div>
     </div>
   );
@@ -251,7 +252,8 @@ export default function App() {
   const [step, setStep] = useState('none');
   const [selItem, setSelItem] = useState(null);
   const [selAddon, setSelAddon] = useState(null);
-  const [bookData, setBookData] = useState({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' });
+  // 修改: bookData 新增 remarks 欄位，並更新 paymentMethod 預設值
+  const [bookData, setBookData] = useState({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' });
   
   const [status, setStatus] = useState({ submitting: false, adminOpen: false, uploadOpen: false, mgrOpen: false, uploading: false });
   const [editItem, setEditItem] = useState(null);
@@ -349,7 +351,8 @@ export default function App() {
       await emailjs.send('service_uniwawa', 'template_d5tq1z9', {
         to_email: bookData.email, staff_email: 'unibeatuy@gmail.com', to_name: bookData.name, phone: bookData.phone,
         store_name: storeName, booking_date: bookData.date, booking_time: bookData.time,
-        item_title: selItem?.title, addon_name: selAddon?.name || '無', total_amount: amount, total_duration: duration, notice_content: NOTICE_TEXT
+        item_title: selItem?.title, addon_name: selAddon?.name || '無', total_amount: amount, total_duration: duration, 
+        notice_content: NOTICE_TEXT, remarks: bookData.remarks // 將備註加入 Email
       }, 'ehbGdRtZaXWft7qLM');
       alert('預約成功！'); setStep('success');
     } catch (e) { console.error(e); alert('預約記錄成功但信件發送失敗'); setStep('success'); }
@@ -358,31 +361,36 @@ export default function App() {
 
   const handleExportCSV = () => {
       const today = new Date();
+      
+      // 修改: 設定搜尋範圍為 前30天 ~ 後30天
+      const start = new Date(today);
+      start.setDate(today.getDate() - 30);
+      start.setHours(0,0,0,0);
+
       const end = new Date(today);
       end.setDate(today.getDate() + 30);
+      end.setHours(23,59,59,999);
       
       const targetBookings = bookings.filter(b => {
           const storeMatch = adminSel.store === 'all' || String(b.storeId) === String(adminSel.store);
           if(!storeMatch) return false;
           const bDate = new Date(b.date);
-          return bDate >= today && bDate <= end;
+          // 修改: 篩選日期在 start 與 end 之間
+          return bDate >= start && bDate <= end;
       });
 
-      // 格式化時間戳記的函式
       const formatTimestamp = (ts) => {
           if (!ts) return '';
-          // 處理 Firestore Timestamp (具有 toDate 方法) 或普通秒數
           const date = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
           return date.toLocaleString('zh-TW', { hour12: false });
       };
 
-      // 修改1: 新增 '下單時間' 到標題的第一個位置
-      const headers = ['下單時間', '日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '預約時長', '金額'];
+      // 標題新增 '備註' 欄位
+      const headers = ['下單時間', '日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '預約時長', '金額', '備註'];
       
-      // 修改1: 對應 rows 資料，將 createdAt 轉換後放在第一個位置
       const rows = targetBookings.map(b => [
         formatTimestamp(b.createdAt),
-        b.date, b.time, b.storeName, b.name, b.phone, b.email, b.itemTitle, b.addonName, b.totalDuration, b.totalAmount
+        b.date, b.time, b.storeName, b.name, b.phone, b.email, b.itemTitle, b.addonName, b.totalDuration, b.totalAmount, b.remarks || ''
       ]);
 
       const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -390,7 +398,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `bookings_next30days_${adminSel.store}.csv`;
+      link.download = `bookings_60days_range_${adminSel.store}.csv`; // 修改檔名提示範圍
       link.click();
       URL.revokeObjectURL(url);
   };
@@ -485,7 +493,13 @@ export default function App() {
                 {isEmailInvalid && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">信箱格式錯誤</span>}
             </div>
             
-            <div className="md:col-span-2 flex items-center gap-2 border-b py-2 text-gray-400 text-xs"><CreditCard size={16}/> 付款方式：<span className="text-[#463E3E]">門市付款</span></div>
+            {/* 修改: 更新付款方式文字 */}
+            <div className="md:col-span-2 flex items-center gap-2 border-b py-2 text-gray-400 text-xs"><CreditCard size={16}/> 付款方式：<span className="text-[#463E3E]">門市付款 (現金/轉帳/Line Pay)</span></div>
+            
+            {/* 修改: 新增備註欄位 */}
+            <div className="md:col-span-2 relative">
+                <input type="text" placeholder="備註 (選填，例如：需卸甲、特殊需求)" className="w-full border-b py-2 outline-none text-xs" value={bookData.remarks} onChange={e => setBookData(p=>({...p, remarks: e.target.value}))} />
+            </div>
           </div>
 
           <div className="border-b pb-6">
@@ -534,7 +548,8 @@ export default function App() {
             
             {[
               ['顧客姓名', bookData.name], ['聯絡電話', bookData.phone], ['電子信箱', bookData.email],
-              ['加購項目', selAddon?.name || '無'], ['總時長', `${getDuration()} 分鐘`], ['付款方式', bookData.paymentMethod]
+              ['加購項目', selAddon?.name || '無'], ['總時長', `${getDuration()} 分鐘`], ['付款方式', bookData.paymentMethod],
+              ['備註', bookData.remarks || '無']
             ].map(([l, v]) => <div key={l} className="flex justify-between border-b border-dashed border-gray-100 pb-2"><span className="text-gray-400">{l}</span><span className="font-medium text-[#463E3E]">{v}</span></div>)}
             
             <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
@@ -594,7 +609,7 @@ export default function App() {
           </div>
           
           <div className="grid md:grid-cols-3 gap-10 pb-24">
-            {processedItems.length > 0 ? processedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款' }); setStep('form'); window.scrollTo(0,0); }} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
+            {processedItems.length > 0 ? processedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
           </div>
         </div>
       );
@@ -619,7 +634,7 @@ export default function App() {
               <div key={b.id} className="bg-white border shadow-lg relative"><div className="h-1 bg-[#C29591]"></div>
                 {(() => { const l = items.find(i=>i.title===b.itemTitle); return l?.images?.[0] ? <div className="h-40 relative"><img src={l.images[0]} className="w-full h-full object-cover" alt="" /><div className="absolute inset-0 bg-gradient-to-t from-[#463E3E]/90 to-transparent p-4 flex items-end text-white"><h3>{b.itemTitle}</h3></div></div> : null; })()}
                 <div className="p-8"><div className="bg-[#FAF9F6] border p-4 text-center mb-8"><span className="text-lg font-bold">{b.date} • {b.time}</span><div className="text-[#C29591] font-bold text-xs">{b.storeName}</div></div>
-                  <div className="space-y-4 text-xs">{[['顧客姓名', b.name], ['聯絡電話', b.phone], ['加購', b.addonName], ['時長', b.totalDuration+'分'], ['付款', b.paymentMethod]].map(([l, v]) => <div key={l} className="flex justify-between border-b border-dashed pb-2"><span className="text-gray-400">{l}</span><span className="font-medium">{v}</span></div>)}</div>
+                  <div className="space-y-4 text-xs">{[['顧客姓名', b.name], ['聯絡電話', b.phone], ['加購', b.addonName], ['時長', b.totalDuration+'分'], ['付款', b.paymentMethod], ['備註', b.remarks||'無']].map(([l, v]) => <div key={l} className="flex justify-between border-b border-dashed pb-2"><span className="text-gray-400">{l}</span><span className="font-medium">{v}</span></div>)}</div>
                   <div className="mt-8 pt-6 border-t flex justify-between items-end"><span className="text-[10px] font-bold text-gray-400">Total</span><span className="text-2xl font-bold text-[#C29591]">NT$ {b.totalAmount?.toLocaleString()}</span></div>
                 </div>
               </div>
@@ -734,7 +749,6 @@ export default function App() {
                 </div>
                 {viewMode === 'list' ? <div className="flex-1 overflow-y-auto pr-2 space-y-3">{listBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={16}/></button></div>)}</div> : 
                 <div className="flex flex-col md:flex-row gap-6 h-full"><div className="w-full md:w-64 flex-shrink-0"><AdminBookingCalendar bookings={storeBookings} selectedDate={adminSel.date} onDateSelect={d=>setAdminSel(p=>({...p, date:d}))}/></div>
-                {/* 修改2: 移除 h-full，改為 flex-1 搭配 min-h-0，解決手機版垂直排列時的捲動溢出問題 */}
                 <div className="flex-1 overflow-y-auto space-y-2 p-2 bg-[#FAF9F6] border border-dashed min-h-0 md:h-full">
                     <h5 className="text-xs font-bold text-[#463E3E] sticky top-0 bg-[#FAF9F6] pb-2 border-b border-gray-200">{adminSel.date} 預約</h5>
                     {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
