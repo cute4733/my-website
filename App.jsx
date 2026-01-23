@@ -424,7 +424,8 @@ export default function App() {
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [sortOption, setSortOption] = useState('latest');
+  // 這裡將預設值從 'latest' 改為 'popular'
+  const [sortOption, setSortOption] = useState('popular');
 
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
@@ -773,8 +774,9 @@ export default function App() {
                         onChange={(e) => setSortOption(e.target.value)}
                         className="text-xs border border-gray-200 rounded-full px-3 py-1.5 outline-none bg-white text-gray-600 focus:border-[#C29591]"
                     >
-                        <option value="latest">最新上架</option>
+                        {/* 這裡調整了選項順序，將熱門排行放第一位 */}
                         <option value="popular">熱門排行</option>
+                        <option value="latest">最新上架</option>
                     </select>
                 </div>
             </div>
