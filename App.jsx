@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3 } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, ShoppingBag, MinusCircle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -39,7 +39,6 @@ const NOTICE_ITEMS = [
 ];
 const NOTICE_TEXT = NOTICE_ITEMS.map((i, idx) => `${idx + 1}. ${i.title}: ${i.content}`).join('\n');
 
-// 這是原本給預約用的 10分鐘間隔 (保留不變，以免影響下單)
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 18; h++) {
@@ -52,12 +51,11 @@ const generateTimeSlots = () => {
 };
 const TIME_SLOTS = generateTimeSlots();
 
-// 新增：專門給時況表用的 30分鐘間隔
 const generateGanttSlots = () => {
   const slots = [];
   for (let h = 12; h <= 18; h++) {
     slots.push(`${h}:00`);
-    if(h !== 18) slots.push(`${h}:30`); // 18:30 是最後一診，視需求保留或移除，這裡保留到 18:30
+    if(h !== 18) slots.push(`${h}:30`);
   }
   return slots;
 };
@@ -66,8 +64,8 @@ const GANTT_SLOTS = generateGanttSlots();
 const timeToMin = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-// --- 元件：風格卡片 ---
-const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagClick }) => {
+// --- 元件：風格卡片 (新增加入購物車按鈕) ---
+const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, addons, onTagClick }) => {
   const [idx, setIdx] = useState(0);
   const [addonId, setAddonId] = useState('');
   const imgs = item.images?.length ? item.images : ['https://via.placeholder.com/400x533'];
@@ -102,6 +100,14 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
             {imgs.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors ${i === idx ? 'bg-white' : 'bg-white/40'}`} />))}
           </div>
         </>}
+        {/* 加入購物車按鈕 (浮在圖片右下) */}
+        <button 
+            onClick={(e) => { e.stopPropagation(); onAddToCart(item); }} 
+            className="absolute bottom-4 right-4 bg-white/90 hover:bg-[#C29591] hover:text-white text-[#463E3E] p-3 rounded-full shadow-md z-20 transition-all active:scale-95"
+            title="加入購物車"
+        >
+            <ShoppingBag size={18} />
+        </button>
       </div>
       <div className="p-6 flex flex-col items-center text-center">
         <span className="text-xs text-[#C29591] tracking-[0.3em] uppercase mb-2 font-medium">{item.category}</span>
@@ -109,6 +115,8 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
         {item.tags?.length > 0 && <div className="flex flex-wrap justify-center gap-2 mb-3 mt-1">{item.tags.map((t, i) => <button key={i} onClick={() => onTagClick(t)} className="text-[10px] text-gray-400 hover:text-[#C29591]">#{t}</button>)}</div>}
         <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 uppercase tracking-widest font-light"><Clock size={14} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-6"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
+        
+        {/* 直接預約的部分 */}
         <select className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-6 outline-none text-[#463E3E] ${!addonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} onChange={(e) => setAddonId(e.target.value)} value={addonId}>
           <option value="">請選擇指甲現況 (必選)</option>
           {addons.map(a => <option key={a.id} value={a.id}>{a.name} (+${a.price} / +{a.duration}分)</option>)}
@@ -119,6 +127,83 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, addons, onTagCl
       </div>
     </div>
   );
+};
+
+// --- 元件：購物車抽屜 (Uber Eat 風格結帳) ---
+const CartDrawer = ({ isOpen, onClose, cartItems, onRemove, onBookCartItem, addons }) => {
+    // 購物車內每個項目自己維護選擇的 addon
+    const CartItem = ({ item }) => {
+        const [localAddonId, setLocalAddonId] = useState('');
+        
+        return (
+            <div className="flex gap-4 p-4 border-b bg-white relative">
+                <div className="w-20 h-20 shrink-0">
+                    <img src={item.images?.[0] || 'https://via.placeholder.com/100'} className="w-full h-full object-cover rounded-sm" alt="" />
+                </div>
+                <div className="flex-1 flex flex-col justify-between">
+                    <div>
+                        <div className="flex justify-between items-start">
+                            <h4 className="text-sm font-bold text-[#463E3E]">{item.title}</h4>
+                            <button onClick={() => onRemove(item.id)} className="text-gray-300 hover:text-red-400"><MinusCircle size={16}/></button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">NT$ {item.price.toLocaleString()}</p>
+                    </div>
+                    
+                    <div className="mt-3">
+                        <select 
+                            className={`w-full text-[10px] border py-1.5 px-2 bg-[#FAF9F6] outline-none mb-2 ${!localAddonId ? 'border-red-200' : 'border-gray-200'}`} 
+                            value={localAddonId}
+                            onChange={(e) => setLocalAddonId(e.target.value)}
+                        >
+                            <option value="">請選擇現況 (必選)</option>
+                            {addons.map(a => <option key={a.id} value={a.id}>{a.name} (+${a.price})</option>)}
+                        </select>
+                        <button 
+                            disabled={!localAddonId}
+                            onClick={() => onBookCartItem(item, addons.find(a => a.id === localAddonId))}
+                            className="w-full bg-[#463E3E] text-white py-2 text-[10px] tracking-widest rounded-sm disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-[#C29591] transition-colors"
+                        >
+                            前往預約此項目
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <>
+            {isOpen && <div className="fixed inset-0 bg-black/40 z-[900]" onClick={onClose}></div>}
+            <div className={`fixed top-0 right-0 h-full w-full md:w-[400px] bg-white z-[950] shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className="p-5 border-b flex justify-between items-center bg-[#FAF9F6]">
+                    <div className="flex items-center gap-2">
+                        <ShoppingBag size={18} className="text-[#C29591]"/>
+                        <span className="font-bold tracking-widest text-[#463E3E]">購物車 ({cartItems.length})</span>
+                    </div>
+                    <button onClick={onClose}><X size={20}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                    {cartItems.length > 0 ? (
+                        cartItems.map((item, index) => (
+                            // 使用 index 作為 key 的一部分以允許重複商品，或過濾重複
+                            <CartItem key={`${item.id}-${index}`} item={item} />
+                        ))
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4">
+                            <ShoppingBag size={48} strokeWidth={1} />
+                            <p className="text-xs tracking-widest">您的購物車是空的</p>
+                            <button onClick={onClose} className="text-[#C29591] text-xs font-bold border-b border-[#C29591]">去逛逛款式</button>
+                        </div>
+                    )}
+                </div>
+                {cartItems.length > 0 && (
+                    <div className="p-4 bg-[#FAF9F6] text-[10px] text-gray-400 text-center border-t">
+                        提醒您：美甲服務一次僅能預約一個項目<br/>請點擊您想施作的款式進行預約
+                    </div>
+                )}
+            </div>
+        </>
+    );
 };
 
 // --- 元件：前台日曆 ---
@@ -204,37 +289,30 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   );
 };
 
-// --- 元件：後台甘特圖 (時況) - 修改為直式 + 30分刻度 ---
+// --- 元件：後台甘特圖 (時況) ---
 const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
     const today = getTodayStr();
     const targetDate = date || today; 
 
     const checkAvailability = (storeId, time) => {
-        // 1. 檢查是否為過去時間
         if (targetDate === today) {
             const now = new Date();
             const slotTime = new Date(`${targetDate} ${time}`);
             if (slotTime < now) return 'past';
         }
 
-        // 2. 檢查該店該日總人力
         const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(storeId));
         const activeStaffCount = storeStaff.filter(s => !(s.leaveDates || []).includes(targetDate)).length;
         
-        if (activeStaffCount === 0) return 'full'; // 無人上班
+        if (activeStaffCount === 0) return 'full'; 
 
-        // 3. 計算佔用人數 (邏輯：只要預約時段 "涵蓋" 了這個半小時的起始點，就算佔用)
         const slotMin = timeToMin(time);
-        
         const occupiedCount = bookings.filter(b => {
             if (String(b.storeId) !== String(storeId) || b.date !== targetDate) return false;
             const bStart = timeToMin(b.time);
             const duration = Number(b.totalDuration) || 90;
             const clean = Number(settings.stores.find(s=>s.id===storeId)?.cleaningTime) || 20;
             const bEnd = bStart + duration + clean;
-            
-            // 只要 Booking 區間包含此 Slot 時間點，或 Slot 在 Booking 區間內
-            // 簡化判斷： Booking End > Slot Start  AND  Booking Start < Slot End (Slot Start + 30)
             return (bEnd > slotMin) && (bStart < slotMin + 30);
         }).length;
 
@@ -255,12 +333,10 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
                 </div>
              </div>
              
-             {/* 直式佈局：Sticky Header 是門市，左側 Stick Column 是時間 */}
              <div className="flex-1 overflow-auto relative">
                 <div className="min-w-full inline-block align-top">
-                    {/* Header Row: Stores */}
                     <div className="flex sticky top-0 z-20 bg-white border-b shadow-sm">
-                        <div className="w-12 shrink-0 bg-[#FAF9F6] border-r z-30"></div> {/* 左上角空塊 */}
+                        <div className="w-12 shrink-0 bg-[#FAF9F6] border-r z-30"></div> 
                         {settings.stores.map(s => (
                             <div key={s.id} className="flex-1 min-w-[60px] text-center py-3 text-[10px] font-bold text-[#463E3E] bg-[#FAF9F6] border-r last:border-r-0">
                                 {s.name}
@@ -268,28 +344,20 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
                         ))}
                     </div>
 
-                    {/* Body: Time Rows */}
                     {GANTT_SLOTS.map(t => (
                         <div key={t} className="flex border-b last:border-b-0 h-12">
-                            {/* Time Column (Sticky Left) */}
                             <div className="w-12 shrink-0 flex items-center justify-center text-[10px] font-bold text-gray-400 bg-white border-r sticky left-0 z-10">
                                 {t}
                             </div>
                             
-                            {/* Store Columns (Cells) */}
                             {settings.stores.map(s => {
                                 const status = checkAvailability(s.id, t);
-                                let bgClass = 'bg-green-50 hover:bg-green-100'; // Available
+                                let bgClass = 'bg-green-50 hover:bg-green-100'; 
                                 if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300';
                                 if (status === 'past') bgClass = 'bg-gray-100 opacity-60';
 
                                 return (
-                                    <div 
-                                        key={s.id} 
-                                        className={`flex-1 min-w-[60px] border-r last:border-r-0 transition-colors relative ${bgClass}`}
-                                    >
-                                        {/* 這裡可以放點擊事件 */}
-                                    </div>
+                                    <div key={s.id} className={`flex-1 min-w-[60px] border-r last:border-r-0 transition-colors relative ${bgClass}`}></div>
                                 );
                             })}
                         </div>
@@ -327,6 +395,19 @@ export default function App() {
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
   
+  // 購物車狀態
+  const [cart, setCart] = useState(() => {
+      try {
+          const saved = localStorage.getItem('uniwawa_cart');
+          return saved ? JSON.parse(saved) : [];
+      } catch { return []; }
+  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  useEffect(() => {
+      localStorage.setItem('uniwawa_cart', JSON.stringify(cart));
+  }, [cart]);
+
   const [settings, setSettings] = useState({ 
       stores: [], staff: [], holidays: [], 
       styleCategories: CONSTANTS.CATS, savedTags: [], blacklist: []
@@ -370,6 +451,30 @@ export default function App() {
           setAdminSel(prev => ({ ...prev, date: upcoming ? upcoming.date : today }));
       }
   }, [mgrTab, bookings, adminSel.store]);
+
+  // 購物車功能
+  const addToCart = (item) => {
+      // 檢查是否已存在 (簡單比對 ID)
+      if (cart.some(c => c.id === item.id)) {
+          alert('此款式已在購物車中');
+          return;
+      }
+      setCart(p => [...p, item]);
+      setIsCartOpen(true); // 自動打開購物車
+  };
+
+  const removeFromCart = (id) => {
+      setCart(p => p.filter(i => i.id !== id));
+  };
+
+  const bookFromCart = (item, addon) => {
+      setSelItem(item);
+      setSelAddon(addon);
+      setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' });
+      setStep('form');
+      setIsCartOpen(false); // 關閉購物車
+      window.scrollTo(0, 0);
+  };
 
   const handleOpenUpload = (item = null) => {
     setEditItem(item);
@@ -447,9 +552,7 @@ export default function App() {
   };
 
   const handleExportCSV = () => {
-      // 修正: 使用更精準的 Date 物件比對
       const today = new Date();
-      
       const start = new Date(today);
       start.setDate(today.getDate() - 30);
       start.setHours(0, 0, 0, 0);
@@ -695,7 +798,7 @@ export default function App() {
           </div>
           
           <div className="grid md:grid-cols-3 gap-10 pb-24">
-            {processedItems.length > 0 ? processedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
+            {processedItems.length > 0 ? processedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} onAddToCart={addToCart} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
           </div>
         </div>
       );
@@ -791,6 +894,29 @@ export default function App() {
         </div>
       </nav>
       <main className="pt-32 md:pt-28 pb-12">{renderContent()}</main>
+
+      {/* 懸浮購物車按鈕 */}
+      {!status.mgrOpen && !status.adminOpen && step !== 'form' && step !== 'success' && (
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 bg-[#463E3E] text-white rounded-full shadow-2xl flex items-center justify-center z-[800] hover:scale-110 transition-transform active:scale-95"
+          >
+              <div className="relative">
+                  <ShoppingBag size={24} />
+                  {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-[#C29591] text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">{cart.length}</span>}
+              </div>
+          </button>
+      )}
+
+      {/* 購物車抽屜 */}
+      <CartDrawer 
+        isOpen={isCartOpen} 
+        onClose={() => setIsCartOpen(false)} 
+        cartItems={cart}
+        onRemove={removeFromCart}
+        onBookCartItem={bookFromCart}
+        addons={addons}
+      />
 
       {status.adminOpen && <div className="fixed inset-0 bg-black/40 z-[250] flex items-center justify-center p-4"><div className="bg-white p-10 max-w-sm w-full shadow-2xl"><h3 className="tracking-[0.5em] mb-10 text-center text-gray-400">ADMIN</h3><form onSubmit={e=>{e.preventDefault(); if(inputs.pwd==="8888") setIsLoggedIn(true); setStatus(p=>({...p, adminOpen:false}));}}><input type="password" placeholder="••••" className="w-full border-b py-4 text-center tracking-[1em] outline-none" onChange={e=>setInputs(p=>({...p, pwd:e.target.value}))} autoFocus/><button className="w-full bg-[#463E3E] text-white py-4 mt-6 text-xs">ENTER</button></form></div></div>}
 
