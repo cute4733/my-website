@@ -331,10 +331,10 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
              <div className="p-4 border-b bg-[#FAF9F6] flex justify-between items-center shrink-0">
                 <div className="flex gap-2 items-center">
                     <BarChart3 size={16} className="text-[#C29591]"/>
-                    <span className="text-xs font-bold tracking-widest text-[#463E3E]">{targetDate} 時況</span>
+                    <span className="text-xs font-bold tracking-widest text-[#463E3E]">{targetDate} 可預約檔期</span>
                 </div>
                 <div className="flex gap-2 text-[9px] flex-wrap">
-                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200"></div>空</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-400"></div>空</span>
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 relative overflow-hidden"><div className="absolute inset-0 border-t border-red-300 -rotate-45"></div></div>滿</span>
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-500"></div>公休</span>
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-100"></div>過</span>
@@ -360,7 +360,7 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
                             
                             {settings.stores.map(s => {
                                 const status = checkAvailability(s.id, t);
-                                let bgClass = 'bg-green-50 hover:bg-green-100'; 
+                                let bgClass = 'bg-green-200 hover:bg-green-300'; 
                                 if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300';
                                 if (status === 'past') bgClass = 'bg-gray-100 opacity-60';
                                 if (status === 'holiday') bgClass = 'bg-gray-500 text-white flex items-center justify-center text-[10px] tracking-widest';
