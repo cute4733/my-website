@@ -159,14 +159,14 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   }, [selectedDate]);
 
   const days = [];
-  for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="w-full aspect-square"></div>);
+  for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="w-full h-7"></div>);
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const hasBooking = bookings.some(b => b.date === dateStr);
     const isSelected = selectedDate === dateStr;
     days.push(
       <button key={d} onClick={() => onDateSelect(dateStr)}
-        className={`w-full aspect-square text-[10px] rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all border
+        className={`w-full h-7 text-[9px] rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all border
         ${isSelected ? 'border-[#C29591] bg-[#FAF9F6] text-[#C29591] font-bold' : 'border-transparent hover:bg-gray-50'}`}>
         <span>{d}</span>
         {hasBooking && <span className="w-1 h-1 rounded-full bg-[#C29591]"></span>}
@@ -174,17 +174,17 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
     );
   }
 
-  // 修改: 縮小容器最大寬度 (max-w-[260px])，縮小 padding 和字體，以利在手機版顯示下方列表
+  // 修改2: 再次縮小寬度 max-w-[210px]，移除 aspect-square 改用固定高度 h-7，節省手機版空間
   return (
-    <div className="w-full max-w-[260px] mx-auto bg-white border border-[#EAE7E2] p-2 shadow-sm">
-      <div className="flex justify-between items-center mb-4 px-1">
-        <h4 className="text-xs font-bold tracking-widest text-[#463E3E]">{year}年 {month + 1}月</h4>
+    <div className="w-full max-w-[210px] mx-auto bg-white border border-[#EAE7E2] p-2 shadow-sm">
+      <div className="flex justify-between items-center mb-2 px-1">
+        <h4 className="text-[10px] font-bold tracking-widest text-[#463E3E]">{year}年 {month + 1}月</h4>
         <div className="flex gap-2">
-          <button onClick={() => setViewDate(new Date(year, month - 1, 1))}><ChevronLeft size={16}/></button>
-          <button onClick={() => setViewDate(new Date(year, month + 1, 1))}><ChevronRight size={16}/></button>
+          <button onClick={() => setViewDate(new Date(year, month - 1, 1))}><ChevronLeft size={14}/></button>
+          <button onClick={() => setViewDate(new Date(year, month + 1, 1))}><ChevronRight size={14}/></button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 mb-1">{CONSTANTS.DAYS.map(w => <div key={w} className="h-6 flex items-center justify-center text-[10px] text-gray-400 font-bold">{w}</div>)}</div>
+      <div className="grid grid-cols-7 gap-1 mb-1">{CONSTANTS.DAYS.map(w => <div key={w} className="h-4 flex items-center justify-center text-[9px] text-gray-400 font-bold">{w}</div>)}</div>
       <div className="grid grid-cols-7 gap-1">{days}</div>
     </div>
   );
@@ -252,7 +252,6 @@ export default function App() {
   const [step, setStep] = useState('none');
   const [selItem, setSelItem] = useState(null);
   const [selAddon, setSelAddon] = useState(null);
-  // 修改: bookData 新增 remarks 欄位，並更新 paymentMethod 預設值
   const [bookData, setBookData] = useState({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' });
   
   const [status, setStatus] = useState({ submitting: false, adminOpen: false, uploadOpen: false, mgrOpen: false, uploading: false });
@@ -352,7 +351,7 @@ export default function App() {
         to_email: bookData.email, staff_email: 'unibeatuy@gmail.com', to_name: bookData.name, phone: bookData.phone,
         store_name: storeName, booking_date: bookData.date, booking_time: bookData.time,
         item_title: selItem?.title, addon_name: selAddon?.name || '無', total_amount: amount, total_duration: duration, 
-        notice_content: NOTICE_TEXT, remarks: bookData.remarks // 將備註加入 Email
+        notice_content: NOTICE_TEXT, remarks: bookData.remarks
       }, 'ehbGdRtZaXWft7qLM');
       alert('預約成功！'); setStep('success');
     } catch (e) { console.error(e); alert('預約記錄成功但信件發送失敗'); setStep('success'); }
@@ -362,21 +361,20 @@ export default function App() {
   const handleExportCSV = () => {
       const today = new Date();
       
-      // 修改: 設定搜尋範圍為 前30天 ~ 後30天
-      const start = new Date(today);
-      start.setDate(today.getDate() - 30);
-      start.setHours(0,0,0,0);
+      // 修改1: 使用本地時間計算前30天與後30天
+      const dStart = new Date(today); dStart.setDate(today.getDate() - 30);
+      const dEnd = new Date(today); dEnd.setDate(today.getDate() + 30);
 
-      const end = new Date(today);
-      end.setDate(today.getDate() + 30);
-      end.setHours(23,59,59,999);
+      // 修改1: 轉換為 YYYY-MM-DD 字串以進行精確的字串比對，避免時區導致漏單
+      const toDateStr = (d) => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      const startStr = toDateStr(dStart);
+      const endStr = toDateStr(dEnd);
       
       const targetBookings = bookings.filter(b => {
           const storeMatch = adminSel.store === 'all' || String(b.storeId) === String(adminSel.store);
           if(!storeMatch) return false;
-          const bDate = new Date(b.date);
-          // 修改: 篩選日期在 start 與 end 之間
-          return bDate >= start && bDate <= end;
+          // 修改1: 直接比對日期字串
+          return b.date >= startStr && b.date <= endStr;
       });
 
       const formatTimestamp = (ts) => {
@@ -385,7 +383,6 @@ export default function App() {
           return date.toLocaleString('zh-TW', { hour12: false });
       };
 
-      // 標題新增 '備註' 欄位
       const headers = ['下單時間', '日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '預約時長', '金額', '備註'];
       
       const rows = targetBookings.map(b => [
@@ -398,7 +395,7 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `bookings_60days_range_${adminSel.store}.csv`; // 修改檔名提示範圍
+      link.download = `bookings_60days_range_${adminSel.store}.csv`;
       link.click();
       URL.revokeObjectURL(url);
   };
@@ -493,10 +490,8 @@ export default function App() {
                 {isEmailInvalid && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">信箱格式錯誤</span>}
             </div>
             
-            {/* 修改: 更新付款方式文字 */}
             <div className="md:col-span-2 flex items-center gap-2 border-b py-2 text-gray-400 text-xs"><CreditCard size={16}/> 付款方式：<span className="text-[#463E3E]">門市付款 (現金/轉帳/Line Pay)</span></div>
             
-            {/* 修改: 新增備註欄位 */}
             <div className="md:col-span-2 relative">
                 <input type="text" placeholder="備註 (選填，例如：需卸甲、特殊需求)" className="w-full border-b py-2 outline-none text-xs" value={bookData.remarks} onChange={e => setBookData(p=>({...p, remarks: e.target.value}))} />
             </div>
