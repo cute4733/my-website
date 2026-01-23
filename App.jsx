@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, ShoppingBag, MinusCircle } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, Heart, MinusCircle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -64,7 +64,7 @@ const GANTT_SLOTS = generateGanttSlots();
 const timeToMin = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-// --- 元件：風格卡片 (新增加入購物車按鈕) ---
+// --- 元件：風格卡片 (icon改為 Heart) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, addons, onTagClick }) => {
   const [idx, setIdx] = useState(0);
   const [addonId, setAddonId] = useState('');
@@ -100,13 +100,13 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
             {imgs.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors ${i === idx ? 'bg-white' : 'bg-white/40'}`} />))}
           </div>
         </>}
-        {/* 加入購物車按鈕 (浮在圖片右下) */}
+        {/* 加入最愛按鈕 (Heart) */}
         <button 
             onClick={(e) => { e.stopPropagation(); onAddToCart(item); }} 
             className="absolute bottom-4 right-4 bg-white/90 hover:bg-[#C29591] hover:text-white text-[#463E3E] p-3 rounded-full shadow-md z-20 transition-all active:scale-95"
-            title="加入購物車"
+            title="加入最愛"
         >
-            <ShoppingBag size={18} />
+            <Heart size={18} />
         </button>
       </div>
       <div className="p-6 flex flex-col items-center text-center">
@@ -116,7 +116,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
         <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 uppercase tracking-widest font-light"><Clock size={14} /> 預計服務：{item.duration || '90'} 分鐘</div>
         <p className="text-[#463E3E] font-bold text-xl mb-6"><span className="text-xs font-light tracking-widest mr-1">NT$</span>{item.price.toLocaleString()}</p>
         
-        {/* 直接預約的部分 */}
         <select className={`w-full text-sm border py-3 px-4 bg-[#FAF9F6] mb-6 outline-none text-[#463E3E] ${!addonId ? 'border-red-200' : 'border-[#EAE7E2]'}`} onChange={(e) => setAddonId(e.target.value)} value={addonId}>
           <option value="">請選擇指甲現況 (必選)</option>
           {addons.map(a => <option key={a.id} value={a.id}>{a.name} (+${a.price} / +{a.duration}分)</option>)}
@@ -129,9 +128,8 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
   );
 };
 
-// --- 元件：購物車抽屜 (Uber Eat 風格結帳) ---
+// --- 元件：購物車抽屜 (Heart Icon) ---
 const CartDrawer = ({ isOpen, onClose, cartItems, onRemove, onBookCartItem, addons }) => {
-    // 購物車內每個項目自己維護選擇的 addon
     const CartItem = ({ item }) => {
         const [localAddonId, setLocalAddonId] = useState('');
         
@@ -177,21 +175,20 @@ const CartDrawer = ({ isOpen, onClose, cartItems, onRemove, onBookCartItem, addo
             <div className={`fixed top-0 right-0 h-full w-full md:w-[400px] bg-white z-[950] shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="p-5 border-b flex justify-between items-center bg-[#FAF9F6]">
                     <div className="flex items-center gap-2">
-                        <ShoppingBag size={18} className="text-[#C29591]"/>
-                        <span className="font-bold tracking-widest text-[#463E3E]">購物車 ({cartItems.length})</span>
+                        <Heart size={18} className="text-[#C29591]"/>
+                        <span className="font-bold tracking-widest text-[#463E3E]">我的最愛 ({cartItems.length})</span>
                     </div>
                     <button onClick={onClose}><X size={20}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {cartItems.length > 0 ? (
                         cartItems.map((item, index) => (
-                            // 使用 index 作為 key 的一部分以允許重複商品，或過濾重複
                             <CartItem key={`${item.id}-${index}`} item={item} />
                         ))
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4">
-                            <ShoppingBag size={48} strokeWidth={1} />
-                            <p className="text-xs tracking-widest">您的購物車是空的</p>
+                            <Heart size={48} strokeWidth={1} />
+                            <p className="text-xs tracking-widest">您的收藏清單是空的</p>
                             <button onClick={onClose} className="text-[#C29591] text-xs font-bold border-b border-[#C29591]">去逛逛款式</button>
                         </div>
                     )}
@@ -289,7 +286,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   );
 };
 
-// --- 元件：後台甘特圖 (時況) ---
+// --- 元件：後台甘特圖 (時況) - 修改為直式 + 30分刻度 ---
 const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
     const today = getTodayStr();
     const targetDate = date || today; 
@@ -456,7 +453,7 @@ export default function App() {
   const addToCart = (item) => {
       // 檢查是否已存在 (簡單比對 ID)
       if (cart.some(c => c.id === item.id)) {
-          alert('此款式已在購物車中');
+          alert('此款式已在收藏中');
           return;
       }
       setCart(p => [...p, item]);
@@ -895,14 +892,14 @@ export default function App() {
       </nav>
       <main className="pt-32 md:pt-28 pb-12">{renderContent()}</main>
 
-      {/* 懸浮購物車按鈕 */}
+      {/* 懸浮購物車按鈕 (Heart Icon) */}
       {!status.mgrOpen && !status.adminOpen && step !== 'form' && step !== 'success' && (
           <button 
             onClick={() => setIsCartOpen(true)}
             className="fixed bottom-6 right-6 w-14 h-14 bg-[#463E3E] text-white rounded-full shadow-2xl flex items-center justify-center z-[800] hover:scale-110 transition-transform active:scale-95"
           >
               <div className="relative">
-                  <ShoppingBag size={24} />
+                  <Heart size={24} />
                   {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-[#C29591] text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">{cart.length}</span>}
               </div>
           </button>
