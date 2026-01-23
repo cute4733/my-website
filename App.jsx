@@ -62,7 +62,13 @@ const generateGanttSlots = () => {
 const GANTT_SLOTS = generateGanttSlots();
 
 const timeToMin = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-const getTodayStr = () => new Date().toISOString().split('T')[0];
+const getTodayStr = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 // --- 元件：風格卡片 (icon改為 Heart) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, addons, onTagClick }) => {
