@@ -368,8 +368,20 @@ export default function App() {
           return bDate >= today && bDate <= end;
       });
 
-      const headers = ['日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '預約時長', '金額'];
+      // 格式化時間戳記的函式
+      const formatTimestamp = (ts) => {
+          if (!ts) return '';
+          // 處理 Firestore Timestamp (具有 toDate 方法) 或普通秒數
+          const date = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+          return date.toLocaleString('zh-TW', { hour12: false });
+      };
+
+      // 修改1: 新增 '下單時間' 到標題的第一個位置
+      const headers = ['下單時間', '日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '預約時長', '金額'];
+      
+      // 修改1: 對應 rows 資料，將 createdAt 轉換後放在第一個位置
       const rows = targetBookings.map(b => [
+        formatTimestamp(b.createdAt),
         b.date, b.time, b.storeName, b.name, b.phone, b.email, b.itemTitle, b.addonName, b.totalDuration, b.totalAmount
       ]);
 
@@ -722,7 +734,8 @@ export default function App() {
                 </div>
                 {viewMode === 'list' ? <div className="flex-1 overflow-y-auto pr-2 space-y-3">{listBookings.map(b => <div key={b.id} className="border p-4 flex justify-between bg-[#FAF9F6] text-[11px] hover:border-[#C29591]"><div><div className="font-bold text-sm mb-1">{b.date} <span className="text-[#C29591]">{b.time}</span> <span className="bg-white border px-1.5 text-gray-400 font-normal text-[10px]">{b.storeName}</span></div><div className="font-bold">{b.name} | {b.phone}</div><div className="text-gray-500 mt-1">{b.itemTitle} {b.addonName!=='無'&&`+ ${b.addonName}`}</div></div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={16}/></button></div>)}</div> : 
                 <div className="flex flex-col md:flex-row gap-6 h-full"><div className="w-full md:w-64 flex-shrink-0"><AdminBookingCalendar bookings={storeBookings} selectedDate={adminSel.date} onDateSelect={d=>setAdminSel(p=>({...p, date:d}))}/></div>
-                <div className="flex-1 overflow-y-auto space-y-2 p-2 bg-[#FAF9F6] border border-dashed h-full">
+                {/* 修改2: 移除 h-full，改為 flex-1 搭配 min-h-0，解決手機版垂直排列時的捲動溢出問題 */}
+                <div className="flex-1 overflow-y-auto space-y-2 p-2 bg-[#FAF9F6] border border-dashed min-h-0 md:h-full">
                     <h5 className="text-xs font-bold text-[#463E3E] sticky top-0 bg-[#FAF9F6] pb-2 border-b border-gray-200">{adminSel.date} 預約</h5>
                     {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
                 </div></div>}
