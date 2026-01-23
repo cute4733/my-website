@@ -231,10 +231,7 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
           const isHoliday = (settings?.holidays || []).some(h => h.date === dateStr && (h.storeId === 'all' || String(h.storeId) === String(selectedStoreId)));
           const staff = (settings?.staff || []).filter(s => String(s.storeId) === String(selectedStoreId));
           const allLeave = staff.length > 0 && staff.every(s => (s.leaveDates || []).includes(dateStr));
-          // 如果 selectedStoreId 為 null (檔期查詢用)，則不檢查 isHoliday/allLeave，僅檢查過去日期
-          const isGeneralView = !selectedStoreId;
-          const disabled = isGeneralView ? (tDate < today || tDate > maxDate) : (isHoliday || allLeave || tDate < today || !selectedStoreId || tDate > maxDate || isDayFull(dateStr));
-          
+          const disabled = isHoliday || allLeave || tDate < today || !selectedStoreId || tDate > maxDate || isDayFull(dateStr);
           return (
             <button key={d} disabled={disabled} onClick={() => onDateSelect(dateStr)} className={`w-full aspect-square text-sm rounded-full flex items-center justify-center transition-all ${disabled ? 'text-gray-300 line-through cursor-not-allowed' : selectedDate === dateStr ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>{d}</button>
           );
