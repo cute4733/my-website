@@ -39,6 +39,7 @@ const NOTICE_ITEMS = [
 ];
 const NOTICE_TEXT = NOTICE_ITEMS.map((i, idx) => `${idx + 1}. ${i.title}: ${i.content}`).join('\n');
 
+// 這是原本給預約用的 10分鐘間隔 (保留不變，以免影響下單)
 const generateTimeSlots = () => {
   const slots = [];
   for (let h = 12; h <= 18; h++) {
@@ -50,6 +51,17 @@ const generateTimeSlots = () => {
   return slots;
 };
 const TIME_SLOTS = generateTimeSlots();
+
+// 新增：專門給時況表用的 30分鐘間隔
+const generateGanttSlots = () => {
+  const slots = [];
+  for (let h = 12; h <= 18; h++) {
+    slots.push(`${h}:00`);
+    if(h !== 18) slots.push(`${h}:30`); // 18:30 是最後一診，視需求保留或移除，這裡保留到 18:30
+  }
+  return slots;
+};
+const GANTT_SLOTS = generateGanttSlots();
 
 const timeToMin = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const getTodayStr = () => new Date().toISOString().split('T')[0];
@@ -192,14 +204,13 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   );
 };
 
-// --- 元件：後台甘特圖 (時況) ---
+// --- 元件：後台甘特圖 (時況) - 修改為直式 + 30分刻度 ---
 const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
     const today = getTodayStr();
-    // 雖然只顯示「當日」，但保留 date 參數擴充性
     const targetDate = date || today; 
 
     const checkAvailability = (storeId, time) => {
-        // 1. 檢查是否為過去時間 (如果是今天)
+        // 1. 檢查是否為過去時間
         if (targetDate === today) {
             const now = new Date();
             const slotTime = new Date(`${targetDate} ${time}`);
@@ -208,13 +219,11 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
 
         // 2. 檢查該店該日總人力
         const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(storeId));
-        // 扣除當日請假人員
         const activeStaffCount = storeStaff.filter(s => !(s.leaveDates || []).includes(targetDate)).length;
         
         if (activeStaffCount === 0) return 'full'; // 無人上班
 
-        // 3. 計算該時段佔用人數
-        // 必須考慮：每個預約的 (開始時間) ~ (開始時間 + 總時長 + 整備時間) 是否覆蓋此 time slot
+        // 3. 計算佔用人數 (邏輯：只要預約時段 "涵蓋" 了這個半小時的起始點，就算佔用)
         const slotMin = timeToMin(time);
         
         const occupiedCount = bookings.filter(b => {
@@ -223,9 +232,10 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
             const duration = Number(b.totalDuration) || 90;
             const clean = Number(settings.stores.find(s=>s.id===storeId)?.cleaningTime) || 20;
             const bEnd = bStart + duration + clean;
-            // 如果時間重疊 (Slot 在預約區間內)
-            // Slot time (start) < Booking End AND Slot Time + 10 > Booking Start
-            return (slotMin < bEnd) && (slotMin + 10 > bStart); 
+            
+            // 只要 Booking 區間包含此 Slot 時間點，或 Slot 在 Booking 區間內
+            // 簡化判斷： Booking End > Slot Start  AND  Booking Start < Slot End (Slot Start + 30)
+            return (bEnd > slotMin) && (bStart < slotMin + 30);
         }).length;
 
         return occupiedCount >= activeStaffCount ? 'full' : 'available';
@@ -233,57 +243,55 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
 
     return (
         <div className="h-full flex flex-col bg-white border border-[#EAE7E2] overflow-hidden">
-             <div className="p-4 border-b bg-[#FAF9F6] flex justify-between items-center">
+             <div className="p-4 border-b bg-[#FAF9F6] flex justify-between items-center shrink-0">
                 <div className="flex gap-2 items-center">
                     <BarChart3 size={16} className="text-[#C29591]"/>
-                    <span className="text-xs font-bold tracking-widest text-[#463E3E]">{targetDate} 時況總覽</span>
+                    <span className="text-xs font-bold tracking-widest text-[#463E3E]">{targetDate} 時況</span>
                 </div>
                 <div className="flex gap-2 text-[9px]">
-                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200"></div>可預約</span>
-                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 relative overflow-hidden"><div className="absolute inset-0 border-t border-red-300 -rotate-45"></div></div>滿額/休</span>
-                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-100"></div>已過</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200"></div>空</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 relative overflow-hidden"><div className="absolute inset-0 border-t border-red-300 -rotate-45"></div></div>滿</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-100"></div>過</span>
                 </div>
              </div>
-             <div className="flex-1 overflow-auto">
-                <div className="min-w-[600px]"> {/* 強制橫向捲動以容納時間軸 */}
-                    <div className="flex border-b sticky top-0 bg-white z-10">
-                        <div className="w-24 flex-shrink-0 p-2 text-[10px] font-bold text-center border-r bg-[#FAF9F6]">門市</div>
-                        <div className="flex-1 flex">
-                            {TIME_SLOTS.map((t, i) => {
-                                // 簡化顯示，只顯示整點
-                                const showLabel = t.endsWith('00');
-                                return (
-                                    <div key={t} className={`flex-1 min-w-[30px] text-[9px] text-center border-r text-gray-400 py-2 ${showLabel?'font-bold text-[#463E3E]':''}`}>
-                                        {showLabel ? t.split(':')[0] : ''}
-                                    </div>
-                                )
-                            })}
-                        </div>
+             
+             {/* 直式佈局：Sticky Header 是門市，左側 Stick Column 是時間 */}
+             <div className="flex-1 overflow-auto relative">
+                <div className="min-w-full inline-block align-top">
+                    {/* Header Row: Stores */}
+                    <div className="flex sticky top-0 z-20 bg-white border-b shadow-sm">
+                        <div className="w-12 shrink-0 bg-[#FAF9F6] border-r z-30"></div> {/* 左上角空塊 */}
+                        {settings.stores.map(s => (
+                            <div key={s.id} className="flex-1 min-w-[60px] text-center py-3 text-[10px] font-bold text-[#463E3E] bg-[#FAF9F6] border-r last:border-r-0">
+                                {s.name}
+                            </div>
+                        ))}
                     </div>
-                    {settings.stores.map(store => (
-                        <div key={store.id} className="flex border-b h-16 group hover:bg-gray-50">
-                            <div className="w-24 flex-shrink-0 p-2 text-[10px] font-bold border-r flex items-center justify-center bg-[#FAF9F6] group-hover:bg-[#FAF9F6]">
-                                {store.name}
-                            </div>
-                            <div className="flex-1 flex relative">
-                                {TIME_SLOTS.map(t => {
-                                    const status = checkAvailability(store.id, t);
-                                    let bgClass = 'bg-green-50 hover:bg-green-100 cursor-pointer'; // Available
-                                    if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300'; // Full pattern done via CSS or simplified
-                                    if (status === 'past') bgClass = 'bg-gray-100 cursor-not-allowed';
 
-                                    return (
-                                        <div 
-                                            key={t} 
-                                            onClick={() => status === 'available' && onTimeClick && onTimeClick(store.id, t)}
-                                            className={`flex-1 min-w-[30px] border-r border-dashed border-gray-100 h-full transition-colors ${bgClass} relative`}
-                                            title={`${t} ${status}`}
-                                        >
-                                            {status === 'full' && <div className="absolute inset-0 border-l border-red-200 rotate-45 transform scale-150 origin-center opacity-30"></div>}
-                                        </div>
-                                    );
-                                })}
+                    {/* Body: Time Rows */}
+                    {GANTT_SLOTS.map(t => (
+                        <div key={t} className="flex border-b last:border-b-0 h-12">
+                            {/* Time Column (Sticky Left) */}
+                            <div className="w-12 shrink-0 flex items-center justify-center text-[10px] font-bold text-gray-400 bg-white border-r sticky left-0 z-10">
+                                {t}
                             </div>
+                            
+                            {/* Store Columns (Cells) */}
+                            {settings.stores.map(s => {
+                                const status = checkAvailability(s.id, t);
+                                let bgClass = 'bg-green-50 hover:bg-green-100'; // Available
+                                if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300';
+                                if (status === 'past') bgClass = 'bg-gray-100 opacity-60';
+
+                                return (
+                                    <div 
+                                        key={s.id} 
+                                        className={`flex-1 min-w-[60px] border-r last:border-r-0 transition-colors relative ${bgClass}`}
+                                    >
+                                        {/* 這裡可以放點擊事件 */}
+                                    </div>
+                                );
+                            })}
                         </div>
                     ))}
                 </div>
@@ -439,15 +447,13 @@ export default function App() {
   };
 
   const handleExportCSV = () => {
-      // 修正: 使用更精準的 Date 物件比對，避免純字串比對或時區問題導致漏單
+      // 修正: 使用更精準的 Date 物件比對
       const today = new Date();
       
-      // 設定起始日為 30 天前的 00:00:00
       const start = new Date(today);
       start.setDate(today.getDate() - 30);
       start.setHours(0, 0, 0, 0);
 
-      // 設定結束日為 30 天後的 23:59:59
       const end = new Date(today);
       end.setDate(today.getDate() + 30);
       end.setHours(23, 59, 59, 999);
@@ -456,9 +462,7 @@ export default function App() {
           const storeMatch = adminSel.store === 'all' || String(b.storeId) === String(adminSel.store);
           if(!storeMatch) return false;
           
-          // 將預約日期字串 (YYYY-MM-DD) 轉為 Date 物件進行比對
           const bDate = new Date(b.date);
-          // 確保 bDate 時間設為 00:00:00 以進行公平比對
           bDate.setHours(0,0,0,0);
 
           return bDate.getTime() >= start.getTime() && bDate.getTime() <= end.getTime();
