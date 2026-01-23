@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, Heart, MinusCircle } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, Heart, MinusCircle, Armchair } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -424,7 +424,6 @@ export default function App() {
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
   const [catalogSearch, setCatalogSearch] = useState('');
-  // 這裡將預設值從 'latest' 改為 'popular'
   const [sortOption, setSortOption] = useState('popular');
 
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
@@ -483,21 +482,52 @@ export default function App() {
   const getDuration = () => (Number(selItem?.duration) || 90) + (Number(selAddon?.duration) || 0);
   const getAmount = () => (Number(selItem?.price) || 0) + (Number(selAddon?.price) || 0);
 
+  // 輔助函式：判斷是否為足部項目
+  const isPedicureItem = (title, category) => {
+    const t = title || '';
+    const c = category || '';
+    return t.includes('足') || c.includes('足');
+  };
+
   const isTimeFull = (date, time) => {
     if (!date || !time || !bookData.storeId) return false;
     if (new Date(`${date} ${time}`) < new Date(Date.now() + 5400000)) return true;
     
+    // 1. 基本人員檢查 (現有邏輯)
     const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(bookData.storeId));
     const availStaff = storeStaff.filter(s => !(s.leaveDates || []).includes(date)).length;
     if (availStaff <= 0) return true;
 
-    const clean = Number(settings.stores.find(s => s.id === bookData.storeId)?.cleaningTime) || CONSTANTS.CLEAN;
+    const store = settings.stores.find(s => s.id === bookData.storeId);
+    const clean = Number(store?.cleaningTime) || CONSTANTS.CLEAN;
     const start = timeToMin(time);
-    const end = start + getDuration() + clean;
+    const duration = getDuration();
+    const end = start + duration + clean;
 
+    // 找出所有時段重疊的訂單 (無論手足)
     const overlapping = bookings.filter(b => b.date === date && String(b.storeId) === String(bookData.storeId) && 
       ((timeToMin(b.time) < end) && ((timeToMin(b.time) + (Number(b.totalDuration) || 90) + clean) > start)));
-    return overlapping.length >= availStaff;
+    
+    // 如果總人力已滿，直接回傳 true
+    if (overlapping.length >= availStaff) return true;
+
+    // 2. 足部椅檢查 (新增邏輯)
+    // 只有當「當前欲預約的項目」是足部時，才需要檢查足部椅數量
+    if (isPedicureItem(selItem?.title, selItem?.category)) {
+        const chairLimit = Number(store?.pedicureChairs) || 1; // 預設 1 張
+        
+        // 在「重疊的訂單」中，計算有多少筆也是足部訂單
+        const overlappingPedicures = overlapping.filter(b => {
+             // 判斷該筆歷史訂單是否為足部 (檢查 title 或 category)
+             // 為了保險，檢查 itemTitle (DB存的) 和原始 item 的 category (如果找得到)
+             const originalItem = items.find(i => i.title === b.itemTitle);
+             return (b.itemTitle?.includes('足')) || (b.category?.includes('足')) || (originalItem?.category?.includes('足'));
+        });
+
+        if (overlappingPedicures.length >= chairLimit) return true;
+    }
+
+    return false;
   };
 
   useEffect(() => {
@@ -536,6 +566,7 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookData, storeName, itemTitle: selItem?.title, addonName: selAddon?.name || '無',
+        category: selItem?.category || '', // 儲存分類以便判斷是否為足部
         totalAmount: amount, totalDuration: duration, createdAt: serverTimestamp()
       });
       await emailjs.send('service_uniwawa', 'template_d5tq1z9', {
@@ -774,7 +805,6 @@ export default function App() {
                         onChange={(e) => setSortOption(e.target.value)}
                         className="text-xs border border-gray-200 rounded-full px-3 py-1.5 outline-none bg-white text-gray-600 focus:border-[#C29591]"
                     >
-                        {/* 這裡調整了選項順序，將熱門排行放第一位 */}
                         <option value="popular">熱門排行</option>
                         <option value="latest">最新上架</option>
                     </select>
@@ -929,8 +959,11 @@ export default function App() {
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {mgrTab === 'stores' && <div className="space-y-6">
                 <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4><p className="text-[10px] text-gray-400 mt-1">設定品牌旗下的所有分店</p></div>
-                <div className="flex gap-2"><input type="text" className="flex-1 border p-2 text-xs" placeholder="新門市名稱" value={inputs.store} onChange={e=>setInputs(p=>({...p, store:e.target.value}))} /><button onClick={()=>{if(!inputs.store)return; saveSettings({...settings, stores:[...settings.stores, {id:Date.now().toString(), name:inputs.store, cleaningTime:20}]}); setInputs(p=>({...p, store:''}))}} className="bg-[#463E3E] text-white px-4 text-xs">新增</button></div>
-                <div className="grid md:grid-cols-3 gap-4">{settings.stores.map(s => <div key={s.id} className="border p-4 bg-white shadow-sm flex flex-col gap-3"><div className="flex justify-between font-bold text-sm text-[#463E3E]"><span>{s.name}</span><button onClick={()=>confirm('刪除？') && saveSettings({...settings, stores:settings.stores.filter(i=>i.id!==s.id)})}><Trash2 size={14}/></button></div><div className="flex items-center gap-2 bg-[#FAF9F6] p-2 rounded text-[10px] text-gray-500"><Clock size={12}/> 整備: <input type="number" defaultValue={s.cleaningTime||20} className="w-10 text-center border" onBlur={e=>saveSettings({...settings, stores:settings.stores.map(i=>i.id===s.id?{...i, cleaningTime:Number(e.target.value)}:i)})} />分</div></div>)}</div>
+                <div className="flex gap-2"><input type="text" className="flex-1 border p-2 text-xs" placeholder="新門市名稱" value={inputs.store} onChange={e=>setInputs(p=>({...p, store:e.target.value}))} /><button onClick={()=>{if(!inputs.store)return; saveSettings({...settings, stores:[...settings.stores, {id:Date.now().toString(), name:inputs.store, cleaningTime:20, pedicureChairs:1}]}); setInputs(p=>({...p, store:''}))}} className="bg-[#463E3E] text-white px-4 text-xs">新增</button></div>
+                <div className="grid md:grid-cols-3 gap-4">{settings.stores.map(s => <div key={s.id} className="border p-4 bg-white shadow-sm flex flex-col gap-3"><div className="flex justify-between font-bold text-sm text-[#463E3E]"><span>{s.name}</span><button onClick={()=>confirm('刪除？') && saveSettings({...settings, stores:settings.stores.filter(i=>i.id!==s.id)})}><Trash2 size={14}/></button></div><div className="flex items-center gap-2 bg-[#FAF9F6] p-2 rounded text-[10px] text-gray-500"><Clock size={12}/> 整備: <input type="number" defaultValue={s.cleaningTime||20} className="w-10 text-center border" onBlur={e=>saveSettings({...settings, stores:settings.stores.map(i=>i.id===s.id?{...i, cleaningTime:Number(e.target.value)}:i)})} />分</div>
+                {/* 新增足部椅設定 */}
+                <div className="flex items-center gap-2 bg-[#FAF9F6] p-2 rounded text-[10px] text-gray-500"><Armchair size={12}/> 足部椅: <input type="number" defaultValue={s.pedicureChairs||1} className="w-10 text-center border" onBlur={e=>saveSettings({...settings, stores:settings.stores.map(i=>i.id===s.id?{...i, pedicureChairs:Number(e.target.value)}:i)})} />張</div>
+                </div>)}</div>
               </div>}
               {mgrTab === 'attributes' && <div className="grid lg:grid-cols-3 gap-8">
                 <div className="space-y-6 border-r pr-8">
