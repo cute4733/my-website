@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, Heart, MinusCircle } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, Heart, MinusCircle, Coffee } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -64,7 +64,7 @@ const GANTT_SLOTS = generateGanttSlots();
 const timeToMin = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-// --- 元件：風格卡片 (icon改為 Heart) ---
+// --- 元件：風格卡片 (Heart Icon) ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, addons, onTagClick }) => {
   const [idx, setIdx] = useState(0);
   const [addonId, setAddonId] = useState('');
@@ -100,7 +100,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
             {imgs.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors ${i === idx ? 'bg-white' : 'bg-white/40'}`} />))}
           </div>
         </>}
-        {/* 加入最愛按鈕 (Heart) */}
         <button 
             onClick={(e) => { e.stopPropagation(); onAddToCart(item); }} 
             className="absolute bottom-4 right-4 bg-white/90 hover:bg-[#C29591] hover:text-white text-[#463E3E] p-3 rounded-full shadow-md z-20 transition-all active:scale-95"
@@ -232,7 +231,10 @@ const CustomCalendar = ({ selectedDate, onDateSelect, settings, selectedStoreId,
           const isHoliday = (settings?.holidays || []).some(h => h.date === dateStr && (h.storeId === 'all' || String(h.storeId) === String(selectedStoreId)));
           const staff = (settings?.staff || []).filter(s => String(s.storeId) === String(selectedStoreId));
           const allLeave = staff.length > 0 && staff.every(s => (s.leaveDates || []).includes(dateStr));
-          const disabled = isHoliday || allLeave || tDate < today || !selectedStoreId || tDate > maxDate || isDayFull(dateStr);
+          // 如果 selectedStoreId 為 null (檔期查詢用)，則不檢查 isHoliday/allLeave，僅檢查過去日期
+          const isGeneralView = !selectedStoreId;
+          const disabled = isGeneralView ? (tDate < today || tDate > maxDate) : (isHoliday || allLeave || tDate < today || !selectedStoreId || tDate > maxDate || isDayFull(dateStr));
+          
           return (
             <button key={d} disabled={disabled} onClick={() => onDateSelect(dateStr)} className={`w-full aspect-square text-sm rounded-full flex items-center justify-center transition-all ${disabled ? 'text-gray-300 line-through cursor-not-allowed' : selectedDate === dateStr ? 'bg-[#463E3E] text-white' : 'hover:bg-[#C29591] hover:text-white'}`}>{d}</button>
           );
@@ -286,18 +288,26 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   );
 };
 
-// --- 元件：後台甘特圖 (時況) - 修改為直式 + 30分刻度 ---
+// --- 元件：檔期甘特圖 (時況) ---
 const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
     const today = getTodayStr();
     const targetDate = date || today; 
 
     const checkAvailability = (storeId, time) => {
+        // 0. 檢查公休日 (優先順序最高)
+        const isHoliday = (settings.holidays || []).some(h => 
+            h.date === targetDate && (h.storeId === 'all' || String(h.storeId) === String(storeId))
+        );
+        if (isHoliday) return 'holiday';
+
+        // 1. 檢查是否為過去時間
         if (targetDate === today) {
             const now = new Date();
             const slotTime = new Date(`${targetDate} ${time}`);
             if (slotTime < now) return 'past';
         }
 
+        // 2. 檢查該店該日總人力
         const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(storeId));
         const activeStaffCount = storeStaff.filter(s => !(s.leaveDates || []).includes(targetDate)).length;
         
@@ -323,9 +333,10 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
                     <BarChart3 size={16} className="text-[#C29591]"/>
                     <span className="text-xs font-bold tracking-widest text-[#463E3E]">{targetDate} 時況</span>
                 </div>
-                <div className="flex gap-2 text-[9px]">
+                <div className="flex gap-2 text-[9px] flex-wrap">
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200"></div>空</span>
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 relative overflow-hidden"><div className="absolute inset-0 border-t border-red-300 -rotate-45"></div></div>滿</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-500"></div>公休</span>
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-100"></div>過</span>
                 </div>
              </div>
@@ -352,9 +363,12 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
                                 let bgClass = 'bg-green-50 hover:bg-green-100'; 
                                 if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300';
                                 if (status === 'past') bgClass = 'bg-gray-100 opacity-60';
+                                if (status === 'holiday') bgClass = 'bg-gray-500 text-white flex items-center justify-center text-[10px] tracking-widest';
 
                                 return (
-                                    <div key={s.id} className={`flex-1 min-w-[60px] border-r last:border-r-0 transition-colors relative ${bgClass}`}></div>
+                                    <div key={s.id} className={`flex-1 min-w-[60px] border-r last:border-r-0 transition-colors relative ${bgClass}`}>
+                                        {status === 'holiday' && '公休'}
+                                    </div>
                                 );
                             })}
                         </div>
@@ -400,6 +414,9 @@ export default function App() {
       } catch { return []; }
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // 公開檔期查詢日期狀態
+  const [publicDate, setPublicDate] = useState(getTodayStr());
 
   useEffect(() => {
       localStorage.setItem('uniwawa_cart', JSON.stringify(cart));
@@ -451,13 +468,12 @@ export default function App() {
 
   // 購物車功能
   const addToCart = (item) => {
-      // 檢查是否已存在 (簡單比對 ID)
       if (cart.some(c => c.id === item.id)) {
           alert('此款式已在收藏中');
           return;
       }
       setCart(p => [...p, item]);
-      setIsCartOpen(true); // 自動打開購物車
+      setIsCartOpen(true); 
   };
 
   const removeFromCart = (id) => {
@@ -469,7 +485,7 @@ export default function App() {
       setSelAddon(addon);
       setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' });
       setStep('form');
-      setIsCartOpen(false); // 關閉購物車
+      setIsCartOpen(false); 
       window.scrollTo(0, 0);
   };
 
@@ -808,6 +824,18 @@ export default function App() {
           </div>
         </div>
       );
+      // 新增前台檔期查詢頁面
+      case 'availability': return (
+        <div className="max-w-3xl mx-auto px-6">
+            <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8">可預約檔期查詢</h2>
+            <div className="mb-8">
+                <CustomCalendar selectedDate={publicDate} onDateSelect={setPublicDate} settings={settings} selectedStoreId={null} isDayFull={() => false} />
+            </div>
+            <div className="h-[600px] border border-[#EAE7E2]">
+                <AvailabilityGantt settings={settings} bookings={bookings} date={publicDate} />
+            </div>
+        </div>
+      );
       case 'search': return (
         <div className="max-w-3xl mx-auto px-6">
           <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-12">預約查詢</h2>
@@ -885,7 +913,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 py-4 md:py-0 md:h-20 flex flex-col md:flex-row items-center justify-between">
           <h1 className="text-2xl md:text-3xl tracking-[0.4em] font-extralight cursor-pointer mb-4 md:mb-0" onClick={() => {setTab('catalog'); setStep('none');}}>UNIWAWA</h1>
           <div className="flex gap-3 md:gap-6 text-xs md:text-sm tracking-widest font-medium uppercase items-center overflow-x-auto no-scrollbar justify-center">
-            {['about:關於', 'catalog:款式', 'notice:須知', 'store:門市', 'search:查詢', 'contact:聯絡'].map(t => { const [k,v]=t.split(':'); return <button key={k} onClick={() => {setTab(k); setStep('none'); if(k==='search') setSearch({key:'',res:[]});}} className={`flex-shrink-0 ${tab===k?'text-[#C29591]':''}`}>{v}</button>; })}
+            {['about:關於', 'catalog:款式', 'notice:須知', 'availability:檔期', 'store:門市', 'search:查詢', 'contact:聯絡'].map(t => { const [k,v]=t.split(':'); return <button key={k} onClick={() => {setTab(k); setStep('none'); if(k==='search') setSearch({key:'',res:[]});}} className={`flex-shrink-0 ${tab===k?'text-[#C29591]':''}`}>{v}</button>; })}
             {isLoggedIn ? <div className="flex gap-4 border-l pl-4 flex-shrink-0"><button onClick={() => handleOpenUpload()} className="text-[#C29591] hover:scale-110"><Plus size={18}/></button><button onClick={() => setStatus(p=>({...p, mgrOpen:true}))} className="text-[#C29591]"><Settings size={18}/></button></div> : <button onClick={() => setStatus(p=>({...p, adminOpen:true}))} className="text-gray-300 hover:text-[#C29591] flex-shrink-0"><Lock size={14}/></button>}
           </div>
         </div>
@@ -922,7 +950,7 @@ export default function App() {
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
-              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'availability',l:'時況',i:<BarChart3 size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
+              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {mgrTab === 'stores' && <div className="space-y-6">
@@ -953,10 +981,6 @@ export default function App() {
                     <h4 className="text-sm font-bold border-l-4 border-[#C29591] pl-4 uppercase tracking-widest text-[#463E3E]">門市公休日設定</h4>
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-3 border"><select className="text-xs border p-2" value={inputs.holiday.storeId} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,storeId:e.target.value}}))}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 p-2 border text-xs" value={inputs.holiday.date} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,date:e.target.value}}))}/><button onClick={()=>{if(inputs.holiday.date) saveSettings({...settings, holidays:[...settings.holidays, inputs.holiday]})}} className="bg-[#463E3E] text-white px-4 py-2 text-[10px]">新增</button></div><div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex gap-2">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name}) <X size={12} className="cursor-pointer" onClick={()=>saveSettings({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
                 </div>
-              </div>}
-
-              {mgrTab === 'availability' && <div className="h-full">
-                  <AvailabilityGantt settings={settings} bookings={bookings} />
               </div>}
               
               {mgrTab === 'bookings' && <div className="h-full flex flex-col space-y-4">
