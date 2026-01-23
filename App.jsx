@@ -336,8 +336,8 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
                 <div className="flex gap-2 text-[9px] flex-wrap">
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-400"></div>空</span>
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 relative overflow-hidden"><div className="absolute inset-0 border-t border-red-300 -rotate-45"></div></div>滿</span>
-                    {/* 修改: 公休與過期使用相同顏色 (bg-gray-500) */}
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-500"></div>公休</span>
+                    {/* 修改: "過" -> "過期" */}
                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-500"></div>過期</span>
                 </div>
              </div>
@@ -361,10 +361,9 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
                             
                             {settings.stores.map(s => {
                                 const status = checkAvailability(s.id, t);
-                                // 修改: 加深空檔顏色
                                 let bgClass = 'bg-green-200 hover:bg-green-300'; 
                                 if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300';
-                                // 修改: Past 與 Holiday 顏色一致 (bg-gray-500)
+                                // 修改: past 也使用 bg-gray-500 (深灰)
                                 if (status === 'past') bgClass = 'bg-gray-500';
                                 if (status === 'holiday') bgClass = 'bg-gray-500 text-white flex items-center justify-center text-[10px] tracking-widest';
 
@@ -440,11 +439,13 @@ export default function App() {
   const [selAddon, setSelAddon] = useState(null);
   const [bookData, setBookData] = useState({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' });
   
+  // 修改: 預設排序改為 'popular'
+  const [sortOption, setSortOption] = useState('popular');
+
   const [status, setStatus] = useState({ submitting: false, adminOpen: false, uploadOpen: false, mgrOpen: false, uploading: false });
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [sortOption, setSortOption] = useState('latest');
 
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
@@ -827,6 +828,7 @@ export default function App() {
           </div>
         </div>
       );
+      // 新增前台檔期查詢頁面
       case 'availability': return (
         <div className="max-w-3xl mx-auto px-6">
             <h2 className="text-2xl font-light tracking-[0.3em] text-[#463E3E] text-center mb-8">可預約檔期查詢</h2>
