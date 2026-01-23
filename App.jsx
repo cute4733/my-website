@@ -683,7 +683,7 @@ export default function App() {
   const renderContent = () => {
     if (step === 'form') return (
       <div className="max-w-2xl mx-auto px-6">
-        <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">RESERVATION / 預約資訊</h2>
+        <h2 className="text-2xl font-light tracking-[0.3em] text-center mb-8 text-[#463E3E]">預約資訊</h2>
         <div className="bg-white border border-[#EAE7E2] mb-6 p-6 shadow-sm flex flex-col md:flex-row gap-6">
            <img src={selItem?.images?.[0]} className="w-24 h-24 object-cover border" alt="" />
            <div className="flex-1">
