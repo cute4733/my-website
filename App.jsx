@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, Heart, MinusCircle, Armchair } from 'lucide-react';
+import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, Heart, MinusCircle, Armchair } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDocs, where } from 'firebase/firestore';
@@ -27,7 +27,7 @@ const CONSTANTS = {
   CLEAN: 20, MAX_DAYS: 30,
   IMG_WAWA: "https://drive.google.com/thumbnail?id=19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78&sz=w1000",
   IMG_STORE: "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000",
-  ITEMS_PER_PAGE: 20 // 設定每頁顯示數量
+  ITEMS_PER_PAGE: 18 // 已修改：每頁顯示 18 樣商品
 };
 
 const NOTICE_ITEMS = [
@@ -51,16 +51,6 @@ const generateTimeSlots = () => {
   return slots;
 };
 const TIME_SLOTS = generateTimeSlots();
-
-const generateGanttSlots = () => {
-  const slots = [];
-  for (let h = 12; h <= 18; h++) {
-    slots.push(`${h}:00`);
-    if(h !== 18) slots.push(`${h}:30`);
-  }
-  return slots;
-};
-const GANTT_SLOTS = generateGanttSlots();
 
 const timeToMin = (t) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const getTodayStr = () => {
@@ -305,85 +295,6 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   );
 };
 
-// --- 元件：後台甘特圖 ---
-const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
-    const today = getTodayStr();
-    const targetDate = date || today; 
-
-    const checkAvailability = (storeId, time) => {
-        if (targetDate === today) {
-            const now = new Date();
-            const slotTime = new Date(`${targetDate} ${time}`);
-            if (slotTime < now) return 'past';
-        }
-
-        const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(storeId));
-        const activeStaffCount = storeStaff.filter(s => !(s.leaveDates || []).includes(targetDate)).length;
-        
-        if (activeStaffCount === 0) return 'full'; 
-
-        const slotMin = timeToMin(time);
-        const occupiedCount = bookings.filter(b => {
-            if (String(b.storeId) !== String(storeId) || b.date !== targetDate) return false;
-            const bStart = timeToMin(b.time);
-            const duration = Number(b.totalDuration) || 90;
-            const clean = Number(settings.stores.find(s=>s.id===storeId)?.cleaningTime) || 20;
-            const bEnd = bStart + duration + clean;
-            return (bEnd > slotMin) && (bStart < slotMin + 30);
-        }).length;
-
-        return occupiedCount >= activeStaffCount ? 'full' : 'available';
-    };
-
-    return (
-        <div className="h-full flex flex-col bg-white border border-[#EAE7E2] overflow-hidden">
-             <div className="p-4 border-b bg-[#FAF9F6] flex justify-between items-center shrink-0">
-                <div className="flex gap-2 items-center">
-                    <BarChart3 size={16} className="text-[#C29591]"/>
-                    <span className="text-xs font-bold tracking-widest text-[#463E3E]">{targetDate} 時況</span>
-                </div>
-                <div className="flex gap-2 text-[9px]">
-                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-200"></div>空</span>
-                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 relative overflow-hidden"><div className="absolute inset-0 border-t border-red-300 -rotate-45"></div></div>滿</span>
-                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-gray-100"></div>過</span>
-                </div>
-             </div>
-             
-             <div className="flex-1 overflow-auto relative">
-                <div className="min-w-full inline-block align-top">
-                    <div className="flex sticky top-0 z-20 bg-white border-b shadow-sm">
-                        <div className="w-12 shrink-0 bg-[#FAF9F6] border-r z-30"></div> 
-                        {settings.stores.map(s => (
-                            <div key={s.id} className="flex-1 min-w-[60px] text-center py-3 text-[10px] font-bold text-[#463E3E] bg-[#FAF9F6] border-r last:border-r-0">
-                                {s.name}
-                            </div>
-                        ))}
-                    </div>
-
-                    {GANTT_SLOTS.map(t => (
-                        <div key={t} className="flex border-b last:border-b-0 h-12">
-                            <div className="w-12 shrink-0 flex items-center justify-center text-[10px] font-bold text-gray-400 bg-white border-r sticky left-0 z-10">
-                                {t}
-                            </div>
-                            
-                            {settings.stores.map(s => {
-                                const status = checkAvailability(s.id, t);
-                                let bgClass = 'bg-green-50 hover:bg-green-100'; 
-                                if (status === 'full') bgClass = 'bg-red-50 pattern-diagonal-lines-sm text-red-300';
-                                if (status === 'past') bgClass = 'bg-gray-100 opacity-60';
-
-                                return (
-                                    <div key={s.id} className={`flex-1 min-w-[60px] border-r last:border-r-0 transition-colors relative ${bgClass}`}></div>
-                                );
-                            })}
-                        </div>
-                    ))}
-                </div>
-             </div>
-        </div>
-    );
-};
-
 
 export default function App() {
   // --- 禁止縮放的核心邏輯 ---
@@ -464,14 +375,8 @@ export default function App() {
         'uniwawa_settings',
         async () => {
             const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'settings'));
-            // 假設 settings 是一份 doc (id="settings") 放在 collection 裡，或者它是 collection
-            // 根據您的原始碼，settings 是 doc(..., 'settings')。
-            // 修正：因為您的原始碼是 doc(...,'settings')，所以這裡不該用 getDocs(collection)
-            // 但如果您的資料結構是 artifacts/appId/public/settings (doc)，那麼該doc不存在子集合
-            // 這裡還原您的原始結構：doc(db, 'artifacts', appId, 'public', 'settings')
-            // 無法直接對 doc 做 getDocs。我們這裡假設 settings 是單一文件資料。
-            // 但因為 fetchWithCache 設計是通用的，我們針對 Settings 特殊處理
-            return {}; // 暫時回傳空，下面用 onSnapshot 讀取 settings 比較保險，因為 settings 很小且需要即時
+            // 暫時回傳空，下面用 onSnapshot 讀取 settings 比較保險，因為 settings 很小且需要即時
+            return {}; 
         },
         () => {} // 佔位
     );
@@ -1077,7 +982,7 @@ export default function App() {
           <div className="bg-white w-full h-full md:max-w-[98vw] md:h-[95vh] shadow-2xl flex flex-col overflow-hidden md:rounded-lg">
             <div className="px-8 py-6 border-b flex justify-between"><h3 className="text-xs tracking-[0.3em] font-bold">系統管理</h3><button onClick={()=>setStatus(p=>({...p, mgrOpen:false}))}><X size={24}/></button></div>
             <div className="flex border-b px-8 bg-[#FAF9F6] overflow-x-auto hide-scrollbar" style={{ touchAction: 'pan-x' }}>
-              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'availability',l:'時況',i:<BarChart3 size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
+              {[{id:'stores',l:'門市',i:<Store size={14}/>},{id:'attributes',l:'商品',i:<Layers size={14}/>},{id:'staff_holiday',l:'人員',i:<Users size={14}/>},{id:'bookings',l:'預約',i:<Calendar size={14}/>},{id:'blacklist',l:'黑名單',i:<Ban size={14}/>}].map(t => <button key={t.id} onClick={()=>setMgrTab(t.id)} className={`flex items-center gap-2 px-6 py-4 text-xs tracking-widest whitespace-nowrap ${mgrTab===t.id?'bg-white border-x border-t border-b-white text-[#C29591] font-bold -mb-[1px]':'text-gray-400'}`}>{t.i} {t.l}</button>)}
             </div>
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {mgrTab === 'stores' && <div className="space-y-6">
@@ -1111,10 +1016,6 @@ export default function App() {
                     <h4 className="text-sm font-bold border-l-4 border-[#C29591] pl-4 uppercase tracking-widest text-[#463E3E]">門市公休日設定</h4>
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-3 border"><select className="text-xs border p-2" value={inputs.holiday.storeId} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,storeId:e.target.value}}))}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 p-2 border text-xs" value={inputs.holiday.date} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,date:e.target.value}}))}/><button onClick={()=>{if(inputs.holiday.date) saveSettings({...settings, holidays:[...settings.holidays, inputs.holiday]})}} className="bg-[#463E3E] text-white px-4 py-2 text-[10px]">新增</button></div><div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex gap-2">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name}) <X size={12} className="cursor-pointer" onClick={()=>saveSettings({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
                 </div>
-              </div>}
-
-              {mgrTab === 'availability' && <div className="h-full">
-                  <AvailabilityGantt settings={settings} bookings={bookings} />
               </div>}
               
               {mgrTab === 'bookings' && <div className="h-full flex flex-col space-y-4">
