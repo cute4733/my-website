@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, ChevronLeft, ChevronRight, Users, UserMinus, Search, Calendar, List as ListIcon, Grid, Download, Store, Filter, MapPin, CreditCard, Hash, Layers, MessageCircle, AlertOctagon, Ban, ArrowDownUp, BarChart3, Heart, MinusCircle, Armchair } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDocs, where } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import emailjs from '@emailjs/browser';
 
@@ -26,7 +26,8 @@ const CONSTANTS = {
   DAYS: ['日', '一', '二', '三', '四', '五', '六'],
   CLEAN: 20, MAX_DAYS: 30,
   IMG_WAWA: "https://drive.google.com/thumbnail?id=19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78&sz=w1000",
-  IMG_STORE: "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000"
+  IMG_STORE: "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000",
+  ITEMS_PER_PAGE: 20 // 設定每頁顯示數量
 };
 
 const NOTICE_ITEMS = [
@@ -70,7 +71,25 @@ const getTodayStr = () => {
   return `${year}-${month}-${day}`;
 };
 
-// --- 元件：風格卡片 (icon改為 Heart) ---
+// 簡單的本地快取函式 (降低 Firebase 讀取)
+const fetchWithCache = async (key, fetcher, setter) => {
+    const cached = localStorage.getItem(key);
+    const now = Date.now();
+    if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // 快取有效時間 1 小時 (3600000ms)
+        if (now - timestamp < 3600000) {
+            setter(data);
+            return;
+        }
+    }
+    // 無快取或過期，重新抓取
+    const data = await fetcher();
+    setter(data);
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: now }));
+};
+
+// --- 元件：風格卡片 ---
 const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, addons, onTagClick }) => {
   const [idx, setIdx] = useState(0);
   const [addonId, setAddonId] = useState('');
@@ -97,7 +116,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
       )}
       <div className="aspect-[3/4] overflow-hidden relative bg-gray-50" onTouchStart={e=>handleTouch(e,'s')} onTouchMove={e=>handleTouch(e,'m')} onTouchEnd={e=>handleTouch(e,'e')}>
         <div className="flex w-full h-full transition-transform duration-500 ease-in-out" style={{ transform: `translateX(-${idx * 100}%)` }}>
-          {imgs.map((src, i) => (<img key={i} src={src} className="w-full h-full object-cover flex-shrink-0" loading={i===0?"eager":"lazy"} decoding="async" alt="" />))}
+          {imgs.map((src, i) => (<img key={i} src={src} className="w-full h-full object-cover flex-shrink-0" loading="lazy" decoding="async" alt="" />))}
         </div>
         {imgs.length > 1 && <>
           <button onClick={(e) => {e.stopPropagation(); move(-1)}} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/30 hover:bg-black/50 text-white rounded-full z-10"><ChevronLeft size={20}/></button>
@@ -106,7 +125,6 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
             {imgs.map((_, i) => (<div key={i} className={`w-1.5 h-1.5 rounded-full shadow-sm transition-colors ${i === idx ? 'bg-white' : 'bg-white/40'}`} />))}
           </div>
         </>}
-        {/* 加入最愛按鈕 (Heart) */}
         <button 
             onClick={(e) => { e.stopPropagation(); onAddToCart(item); }} 
             className="absolute bottom-4 right-4 bg-white/90 hover:bg-[#C29591] hover:text-white text-[#463E3E] p-3 rounded-full shadow-md z-20 transition-all active:scale-95"
@@ -134,7 +152,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
   );
 };
 
-// --- 元件：購物車抽屜 (Heart Icon) ---
+// --- 元件：購物車抽屜 ---
 const CartDrawer = ({ isOpen, onClose, cartItems, onRemove, onBookCartItem, addons }) => {
     const CartItem = ({ item }) => {
         const [localAddonId, setLocalAddonId] = useState('');
@@ -199,11 +217,6 @@ const CartDrawer = ({ isOpen, onClose, cartItems, onRemove, onBookCartItem, addo
                         </div>
                     )}
                 </div>
-                {cartItems.length > 0 && (
-                    <div className="p-4 bg-[#FAF9F6] text-[10px] text-gray-400 text-center border-t">
-                        提醒您：美甲服務一次僅能預約一個項目<br/>請點擊您想施作的款式進行預約
-                    </div>
-                )}
             </div>
         </>
     );
@@ -292,7 +305,7 @@ const AdminBookingCalendar = ({ bookings, onDateSelect, selectedDate }) => {
   );
 };
 
-// --- 元件：後台甘特圖 (時況) - 修改為直式 + 30分刻度 ---
+// --- 元件：後台甘特圖 ---
 const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
     const today = getTodayStr();
     const targetDate = date || today; 
@@ -373,7 +386,7 @@ const AvailabilityGantt = ({ settings, bookings, date, onTimeClick }) => {
 
 
 export default function App() {
-  // --- 禁止縮放的核心邏輯 (Start) ---
+  // --- 禁止縮放的核心邏輯 ---
   useEffect(() => {
     const metaTagId = 'viewport-meta-no-zoom';
     let meta = document.getElementById(metaTagId);
@@ -389,14 +402,18 @@ export default function App() {
     document.addEventListener('gesturestart', preventGestureZoom);
     return () => document.removeEventListener('gesturestart', preventGestureZoom);
   }, []);
-  // --- 禁止縮放的核心邏輯 (End) ---
 
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState('catalog');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+  // 資料狀態
   const [items, setItems] = useState([]);
   const [addons, setAddons] = useState([]);
   const [bookings, setBookings] = useState([]);
+  
+  // 分頁狀態 (Pagination)
+  const [currentPage, setCurrentPage] = useState(1);
   
   // 購物車狀態
   const [cart, setCart] = useState(() => {
@@ -437,13 +454,68 @@ export default function App() {
   const [search, setSearch] = useState({ key: '', res: [] });
 
   useEffect(() => { signInAnonymously(auth); onAuthStateChanged(auth, setUser); }, []);
+
+  // --- 重大修改：資料讀取邏輯 (降低成本 + 快取) ---
   useEffect(() => {
     if (!user) return;
+
+    // 1. 讀取 Settings (有快取)
+    fetchWithCache(
+        'uniwawa_settings',
+        async () => {
+            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'settings'));
+            // 假設 settings 是一份 doc (id="settings") 放在 collection 裡，或者它是 collection
+            // 根據您的原始碼，settings 是 doc(..., 'settings')。
+            // 修正：因為您的原始碼是 doc(...,'settings')，所以這裡不該用 getDocs(collection)
+            // 但如果您的資料結構是 artifacts/appId/public/settings (doc)，那麼該doc不存在子集合
+            // 這裡還原您的原始結構：doc(db, 'artifacts', appId, 'public', 'settings')
+            // 無法直接對 doc 做 getDocs。我們這裡假設 settings 是單一文件資料。
+            // 但因為 fetchWithCache 設計是通用的，我們針對 Settings 特殊處理
+            return {}; // 暫時回傳空，下面用 onSnapshot 讀取 settings 比較保險，因為 settings 很小且需要即時
+        },
+        () => {} // 佔位
+    );
+    
+    // 設定檔通常很小，維持 onSnapshot 以便管理員修改後立刻生效
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings'), d => d.exists() && setSettings(s => ({ ...s, ...d.data() })));
-    const unsubItems = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), s => setItems(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubAddons = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'addons'), s => setAddons(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubBookings = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), orderBy('createdAt', 'desc')), s => setBookings(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => { unsubSettings(); unsubItems(); unsubAddons(); unsubBookings(); };
+
+    // 2. 讀取 Items (款式) - 改為單次讀取 + 快取
+    fetchWithCache(
+        'uniwawa_designs',
+        async () => {
+            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        },
+        setItems
+    );
+
+    // 3. 讀取 Addons (加購) - 改為單次讀取 + 快取
+    fetchWithCache(
+        'uniwawa_addons',
+        async () => {
+            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'addons'));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        },
+        setAddons
+    );
+
+    // 4. 讀取 Bookings (預約) - 關鍵優化：只讀取「昨天」以後的訂單
+    // 計算昨天的日期
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const bookingsQuery = query(
+        collection(db, 'artifacts', appId, 'public', 'data', 'bookings'),
+        where('date', '>=', yesterdayStr)
+        // orderBy('date') // 若報錯需要去 Firebase Console 建立索引
+    );
+
+    const unsubBookings = onSnapshot(bookingsQuery, (s) => {
+        setBookings(s.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => { unsubSettings(); unsubBookings(); };
   }, [user]);
 
   useEffect(() => {
@@ -454,6 +526,11 @@ export default function App() {
           setAdminSel(prev => ({ ...prev, date: upcoming ? upcoming.date : today }));
       }
   }, [mgrTab, bookings, adminSel.store]);
+
+  // 當篩選條件改變時，重置分頁回第一頁
+  useEffect(() => {
+      setCurrentPage(1);
+  }, [filters, catalogSearch, sortOption]);
 
   // 購物車功能
   const addToCart = (item) => {
@@ -639,6 +716,13 @@ export default function App() {
       const payload = { ...formData, price: Number(formData.price), duration: Number(formData.duration), images: urls, tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(t=>t) : [], updatedAt: serverTimestamp() };
       editItem ? await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', editItem.id), payload) : await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), { ...payload, createdAt: serverTimestamp() });
       setStatus(p => ({ ...p, uploadOpen: false })); setFiles([]); alert("發布成功！");
+      // 更新 items (因為拿掉了 onSnapshot，這裡要手動更新本地狀態)
+      setItems(prev => {
+          const newItem = { id: editItem?.id || 'temp', ...payload };
+          return editItem ? prev.map(i => i.id === editItem.id ? newItem : i) : [newItem, ...prev];
+      });
+      // 清除快取，確保下次重整拿到最新
+      localStorage.removeItem('uniwawa_designs');
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
 
@@ -672,11 +756,21 @@ export default function App() {
     return res;
   }, [items, filters, catalogSearch, sortOption, bookings]);
 
+  // --- 分頁邏輯 (Pagination) ---
+  const paginatedItems = useMemo(() => {
+      const startIndex = (currentPage - 1) * CONSTANTS.ITEMS_PER_PAGE;
+      const endIndex = startIndex + CONSTANTS.ITEMS_PER_PAGE;
+      return processedItems.slice(startIndex, endIndex);
+  }, [processedItems, currentPage]);
+
+  const totalPages = Math.ceil(processedItems.length / CONSTANTS.ITEMS_PER_PAGE);
+
   const storeBookings = useMemo(() => bookings.filter(b => adminSel.store === 'all' || String(b.storeId) === String(adminSel.store)), [bookings, adminSel.store]);
 
   const listBookings = useMemo(() => {
-      const start = new Date(); start.setDate(start.getDate() - 90);
-      return storeBookings.filter(b => new Date(b.date) >= start).sort((a,b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
+      // 因為我們現在只抓昨天以後的，這裡的篩選邏輯變得簡單
+      // 如果管理者要看很久以前的，可能需要另外做一個按鈕去讀取歷史集合(為了省錢暫不實作)
+      return storeBookings.sort((a,b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
   }, [storeBookings]);
 
   const dayBookings = useMemo(() => {
@@ -793,6 +887,7 @@ export default function App() {
       case 'catalog': return (
         <div className="max-w-7xl mx-auto px-6 space-y-8">
           <div className="flex flex-col gap-6 border-b pb-8 mb-8">
+            {/* ... 搜尋與篩選 ... */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center pb-4 border-b border-dashed border-gray-200">
                 <div className="flex items-center gap-2 w-full md:w-auto relative">
                     <Search size={14} className="absolute left-3 text-gray-400"/>
@@ -832,9 +927,32 @@ export default function App() {
             {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
           </div>
           
-          <div className="grid md:grid-cols-3 gap-10 pb-24">
-            {processedItems.length > 0 ? processedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} onAddToCart={addToCart} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
+          <div className="grid md:grid-cols-3 gap-10">
+            {paginatedItems.length > 0 ? paginatedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} onAddToCart={addToCart} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
           </div>
+
+          {/* 分頁控制器 (Pagination Controls) */}
+          {processedItems.length > 0 && (
+              <div className="flex justify-center items-center gap-4 pt-8 pb-24">
+                  <button 
+                      onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo(0,0); }}
+                      disabled={currentPage === 1}
+                      className="p-2 border rounded-full hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                      <ChevronLeft size={16} />
+                  </button>
+                  <span className="text-xs font-bold tracking-widest text-gray-500">
+                      Page {currentPage} / {totalPages}
+                  </span>
+                  <button 
+                      onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); window.scrollTo(0,0); }}
+                      disabled={currentPage === totalPages}
+                      className="p-2 border rounded-full hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                      <ChevronRight size={16} />
+                  </button>
+              </div>
+          )}
         </div>
       );
       case 'notice': return (
@@ -908,7 +1026,6 @@ export default function App() {
         ::-webkit-scrollbar-thumb{background:#C29591;border-radius:3px}
         html{overflow-y:scroll}
         .hide-scrollbar::-webkit-scrollbar{display:none}
-        /* 禁止縮放與字體調整的核心 CSS */
         html, body {
             touch-action: manipulation;
             -webkit-text-size-adjust: 100%;
