@@ -27,7 +27,7 @@ const CONSTANTS = {
   CLEAN: 20, MAX_DAYS: 30,
   IMG_WAWA: "https://drive.google.com/thumbnail?id=19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78&sz=w1000",
   IMG_STORE: "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000",
-  ITEMS_PER_PAGE: 18 // 已修改：每頁顯示 18 樣商品
+  ITEMS_PER_PAGE: 18
 };
 
 const NOTICE_ITEMS = [
@@ -61,22 +61,49 @@ const getTodayStr = () => {
   return `${year}-${month}-${day}`;
 };
 
-// 簡單的本地快取函式 (降低 Firebase 讀取)
+// 本地快取函式
 const fetchWithCache = async (key, fetcher, setter) => {
     const cached = localStorage.getItem(key);
     const now = Date.now();
     if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        // 快取有效時間 1 小時 (3600000ms)
-        if (now - timestamp < 3600000) {
+        if (now - timestamp < 3600000) { // 1小時快取
             setter(data);
             return;
         }
     }
-    // 無快取或過期，重新抓取
     const data = await fetcher();
     setter(data);
     localStorage.setItem(key, JSON.stringify({ data, timestamp: now }));
+};
+
+// --- 圖片壓縮函式 (省流量神器) ---
+const compressImage = (file) => {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const maxWidth = 800; // 限制最大寬度 800px
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                }, 'image/jpeg', 0.8); // 80% 品質
+            };
+        };
+    });
 };
 
 // --- 元件：風格卡片 ---
@@ -358,7 +385,7 @@ export default function App() {
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [sortOption, setSortOption] = useState('popular');
+  const [sortOption, setSortOption] = useState('latest'); // 預設改為最新，因為沒有即時讀取預約資料，無法算熱門
 
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
@@ -366,25 +393,13 @@ export default function App() {
 
   useEffect(() => { signInAnonymously(auth); onAuthStateChanged(auth, setUser); }, []);
 
-  // --- 重大修改：資料讀取邏輯 (降低成本 + 快取) ---
+  // --- 資料讀取邏輯 (靜態資料) ---
   useEffect(() => {
     if (!user) return;
 
-    // 1. 讀取 Settings (有快取)
-    fetchWithCache(
-        'uniwawa_settings',
-        async () => {
-            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'settings'));
-            // 暫時回傳空，下面用 onSnapshot 讀取 settings 比較保險，因為 settings 很小且需要即時
-            return {}; 
-        },
-        () => {} // 佔位
-    );
-    
-    // 設定檔通常很小，維持 onSnapshot 以便管理員修改後立刻生效
+    fetchWithCache('uniwawa_settings', async () => ({}), () => {});
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings'), d => d.exists() && setSettings(s => ({ ...s, ...d.data() })));
 
-    // 2. 讀取 Items (款式) - 改為單次讀取 + 快取
     fetchWithCache(
         'uniwawa_designs',
         async () => {
@@ -394,7 +409,6 @@ export default function App() {
         setItems
     );
 
-    // 3. 讀取 Addons (加購) - 改為單次讀取 + 快取
     fetchWithCache(
         'uniwawa_addons',
         async () => {
@@ -404,24 +418,31 @@ export default function App() {
         setAddons
     );
 
-    // 4. 讀取 Bookings (預約) - 關鍵優化：只讀取「昨天」以後的訂單
-    // 計算昨天的日期
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    const bookingsQuery = query(
-        collection(db, 'artifacts', appId, 'public', 'data', 'bookings'),
-        where('date', '>=', yesterdayStr)
-        // orderBy('date') // 若報錯需要去 Firebase Console 建立索引
-    );
-
-    const unsubBookings = onSnapshot(bookingsQuery, (s) => {
-        setBookings(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => { unsubSettings(); unsubBookings(); };
+    return () => { unsubSettings(); };
   }, [user]);
+
+  // --- 關鍵優化：只在需要時讀取預約資料 (Booking, Search, Admin) ---
+  useEffect(() => {
+      if (!user) return;
+      
+      // 只有當使用者進入預約表單、查詢頁面或後台時，才連線讀取預約資料
+      if (step === 'form' || tab === 'search' || status.mgrOpen) {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+          const bookingsQuery = query(
+              collection(db, 'artifacts', appId, 'public', 'data', 'bookings'),
+              where('date', '>=', yesterdayStr)
+          );
+
+          const unsub = onSnapshot(bookingsQuery, (s) => {
+              setBookings(s.docs.map(d => ({ id: d.id, ...d.data() })));
+          });
+          
+          return () => unsub();
+      }
+  }, [user, step, tab, status.mgrOpen]);
 
   useEffect(() => {
       if (mgrTab === 'bookings' && bookings.length > 0) {
@@ -432,20 +453,17 @@ export default function App() {
       }
   }, [mgrTab, bookings, adminSel.store]);
 
-  // 當篩選條件改變時，重置分頁回第一頁
   useEffect(() => {
       setCurrentPage(1);
   }, [filters, catalogSearch, sortOption]);
 
-  // 購物車功能
   const addToCart = (item) => {
-      // 檢查是否已存在 (簡單比對 ID)
       if (cart.some(c => c.id === item.id)) {
           alert('此款式已在收藏中');
           return;
       }
       setCart(p => [...p, item]);
-      setIsCartOpen(true); // 自動打開購物車
+      setIsCartOpen(true);
   };
 
   const removeFromCart = (id) => {
@@ -457,7 +475,7 @@ export default function App() {
       setSelAddon(addon);
       setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' });
       setStep('form');
-      setIsCartOpen(false); // 關閉購物車
+      setIsCartOpen(false);
       window.scrollTo(0, 0);
   };
 
@@ -470,7 +488,6 @@ export default function App() {
   const getDuration = () => (Number(selItem?.duration) || 90) + (Number(selAddon?.duration) || 0);
   const getAmount = () => (Number(selItem?.price) || 0) + (Number(selAddon?.price) || 0);
 
-  // 輔助函式：判斷是否為足部項目
   const isPedicureItem = (title, category) => {
     const t = title || '';
     const c = category || '';
@@ -481,7 +498,6 @@ export default function App() {
     if (!date || !time || !bookData.storeId) return false;
     if (new Date(`${date} ${time}`) < new Date(Date.now() + 5400000)) return true;
     
-    // 1. 基本人員檢查 (現有邏輯)
     const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(bookData.storeId));
     const availStaff = storeStaff.filter(s => !(s.leaveDates || []).includes(date)).length;
     if (availStaff <= 0) return true;
@@ -492,26 +508,17 @@ export default function App() {
     const duration = getDuration();
     const end = start + duration + clean;
 
-    // 找出所有時段重疊的訂單 (無論手足)
     const overlapping = bookings.filter(b => b.date === date && String(b.storeId) === String(bookData.storeId) && 
       ((timeToMin(b.time) < end) && ((timeToMin(b.time) + (Number(b.totalDuration) || 90) + clean) > start)));
     
-    // 如果總人力已滿，直接回傳 true
     if (overlapping.length >= availStaff) return true;
 
-    // 2. 足部椅檢查 (新增邏輯)
-    // 只有當「當前欲預約的項目」是足部時，才需要檢查足部椅數量
     if (isPedicureItem(selItem?.title, selItem?.category)) {
-        const chairLimit = Number(store?.pedicureChairs) || 1; // 預設 1 張
-        
-        // 在「重疊的訂單」中，計算有多少筆也是足部訂單
+        const chairLimit = Number(store?.pedicureChairs) || 1;
         const overlappingPedicures = overlapping.filter(b => {
-             // 判斷該筆歷史訂單是否為足部 (檢查 title 或 category)
-             // 為了保險，檢查 itemTitle (DB存的) 和原始 item 的 category (如果找得到)
              const originalItem = items.find(i => i.title === b.itemTitle);
              return (b.itemTitle?.includes('足')) || (b.category?.includes('足')) || (originalItem?.category?.includes('足'));
         });
-
         if (overlappingPedicures.length >= chairLimit) return true;
     }
 
@@ -554,7 +561,7 @@ export default function App() {
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
         ...bookData, storeName, itemTitle: selItem?.title, addonName: selAddon?.name || '無',
-        category: selItem?.category || '', // 儲存分類以便判斷是否為足部
+        category: selItem?.category || '',
         totalAmount: amount, totalDuration: duration, createdAt: serverTimestamp()
       });
       await emailjs.send('service_uniwawa', 'template_d5tq1z9', {
@@ -581,10 +588,8 @@ export default function App() {
       const targetBookings = bookings.filter(b => {
           const storeMatch = adminSel.store === 'all' || String(b.storeId) === String(adminSel.store);
           if(!storeMatch) return false;
-          
           const bDate = new Date(b.date);
           bDate.setHours(0,0,0,0);
-
           return bDate.getTime() >= start.getTime() && bDate.getTime() <= end.getTime();
       });
 
@@ -595,7 +600,6 @@ export default function App() {
       };
 
       const headers = ['下單時間', '日期', '時間', '門市', '顧客姓名', '電話', '電子信箱', '服務項目', '加購項目', '預約時長', '金額', '備註'];
-      
       const rows = targetBookings.map(b => [
         formatTimestamp(b.createdAt),
         b.date, b.time, b.storeName, b.name, b.phone, b.email, b.itemTitle, b.addonName, b.totalDuration, b.totalAmount, b.remarks || ''
@@ -616,17 +620,17 @@ export default function App() {
     try {
       let urls = formData.images.filter(u => !u.startsWith('blob:'));
       if (files.length) {
-        urls = [...urls, ...await Promise.all(files.map(async f => await getDownloadURL((await uploadBytes(ref(storage, `nail_designs/${Date.now()}_${f.name}`), f)).ref)))];
+        // 使用圖片壓縮函式
+        const compressedFiles = await Promise.all(files.map(async f => await compressImage(f)));
+        urls = [...urls, ...await Promise.all(compressedFiles.map(async f => await getDownloadURL((await uploadBytes(ref(storage, `nail_designs/${Date.now()}_${f.name}`), f)).ref)))];
       }
       const payload = { ...formData, price: Number(formData.price), duration: Number(formData.duration), images: urls, tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(t=>t) : [], updatedAt: serverTimestamp() };
       editItem ? await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', editItem.id), payload) : await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'nail_designs'), { ...payload, createdAt: serverTimestamp() });
       setStatus(p => ({ ...p, uploadOpen: false })); setFiles([]); alert("發布成功！");
-      // 更新 items (因為拿掉了 onSnapshot，這裡要手動更新本地狀態)
       setItems(prev => {
           const newItem = { id: editItem?.id || 'temp', ...payload };
           return editItem ? prev.map(i => i.id === editItem.id ? newItem : i) : [newItem, ...prev];
       });
-      // 清除快取，確保下次重整拿到最新
       localStorage.removeItem('uniwawa_designs');
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
@@ -648,20 +652,12 @@ export default function App() {
         res = res.filter(i => i.title.toLowerCase().includes(lowerKey) || i.tags?.some(t => t.toLowerCase().includes(lowerKey)));
     }
 
-    if (sortOption === 'popular') {
-        const popularityMap = bookings.reduce((acc, b) => {
-            if(b.itemTitle) acc[b.itemTitle] = (acc[b.itemTitle] || 0) + 1;
-            return acc;
-        }, {});
-        res.sort((a, b) => (popularityMap[b.title] || 0) - (popularityMap[a.title] || 0));
-    } else {
-        res.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-    }
+    // 因為延遲載入預約資料，無法計算即時熱門，故預設使用建立時間排序 (Latest)
+    res.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
     return res;
-  }, [items, filters, catalogSearch, sortOption, bookings]);
+  }, [items, filters, catalogSearch, bookings]);
 
-  // --- 分頁邏輯 (Pagination) ---
   const paginatedItems = useMemo(() => {
       const startIndex = (currentPage - 1) * CONSTANTS.ITEMS_PER_PAGE;
       const endIndex = startIndex + CONSTANTS.ITEMS_PER_PAGE;
@@ -673,8 +669,6 @@ export default function App() {
   const storeBookings = useMemo(() => bookings.filter(b => adminSel.store === 'all' || String(b.storeId) === String(adminSel.store)), [bookings, adminSel.store]);
 
   const listBookings = useMemo(() => {
-      // 因為我們現在只抓昨天以後的，這裡的篩選邏輯變得簡單
-      // 如果管理者要看很久以前的，可能需要另外做一個按鈕去讀取歷史集合(為了省錢暫不實作)
       return storeBookings.sort((a,b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
   }, [storeBookings]);
 
@@ -707,32 +701,25 @@ export default function App() {
                 <input type="text" placeholder="顧客姓名 (必填，不可含數字)" className={`w-full border-b py-2 outline-none ${/\d/.test(bookData.name) ? 'border-red-300 text-red-500' : ''}`} value={bookData.name} onChange={e => setBookData(p=>({...p, name: e.target.value}))} />
                 {/\d/.test(bookData.name) && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">姓名不可包含數字</span>}
             </div>
-            
             <div className="relative">
                 <input type="tel" placeholder="聯絡電話 (必填10碼)" className={`w-full border-b py-2 outline-none ${isPhoneInvalid ? 'border-red-300 text-red-500' : ''}`} value={bookData.phone} onChange={e => { const v = e.target.value.replace(/\D/g, ''); if(v.length<=10) setBookData(p=>({...p, phone:v})); }} />
                 {isPhoneInvalid && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">電話需為10碼數字</span>}
             </div>
-
             <div className="relative">
                 <input type="email" placeholder="電子信箱 (必填)" className={`w-full border-b py-2 outline-none ${isEmailInvalid ? 'border-red-300 text-red-500' : ''}`} value={bookData.email} onChange={e => setBookData(p=>({...p, email: e.target.value}))} />
                 {isEmailInvalid && <span className="absolute -bottom-5 left-0 text-[10px] text-red-500">信箱格式錯誤</span>}
             </div>
-            
             <div className="md:col-span-2 flex items-center gap-2 border-b py-2 text-gray-400 text-xs"><CreditCard size={16}/> 付款方式：<span className="text-[#463E3E]">門市付款 (現金/轉帳/Line Pay)</span></div>
-            
             <div className="md:col-span-2 relative">
                 <input type="text" placeholder="備註 (選填，例如：需卸甲、特殊需求)" className="w-full border-b py-2 outline-none text-xs" value={bookData.remarks} onChange={e => setBookData(p=>({...p, remarks: e.target.value}))} />
             </div>
           </div>
-
           <div className="border-b pb-6">
             <label className="text-xs font-bold text-gray-400 mb-2 block">選擇預約門市</label>
             <div className="flex flex-wrap gap-3">{settings.stores.map(s => <button key={s.id} onClick={() => setBookData(p => ({ ...p, storeId: s.id, date: '', time: '' }))} className={`px-4 py-2 text-xs border rounded-full ${String(bookData.storeId) === String(s.id) ? 'bg-[#463E3E] text-white' : 'hover:border-[#C29591]'}`}>{s.name}</button>)}</div>
           </div>
-
           <div className="flex justify-center pt-2"><CustomCalendar selectedDate={bookData.date} onDateSelect={d => setBookData(p=>({...p, date: d, time: ''}))} settings={settings} selectedStoreId={bookData.storeId} isDayFull={d => TIME_SLOTS.every(t => isTimeFull(d, t))} /></div>
           {bookData.date && bookData.storeId && <div className="grid grid-cols-4 md:grid-cols-6 gap-2">{TIME_SLOTS.map(t => <button key={t} disabled={isTimeFull(bookData.date, t)} onClick={() => setBookData(p=>({...p, time: t}))} className={`py-2 text-[10px] border ${bookData.time===t ? 'bg-[#463E3E] text-white' : 'bg-white disabled:opacity-20'}`}>{t}</button>)}</div>}
-          
           <button disabled={status.submitting || !bookData.storeId || /\d/.test(bookData.name) || !bookData.name || bookData.phone.length!==10 || isEmailInvalid || !bookData.email || !bookData.time} onClick={confirmBooking} className="w-full py-4 bg-[#463E3E] text-white text-xs tracking-widest uppercase disabled:opacity-50">
             {status.submitting ? '處理中...' : !bookData.storeId ? '請先選擇門市' : '確認送出預約'}
           </button>
@@ -745,7 +732,6 @@ export default function App() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#FAF9F6] mb-4"><CheckCircle size={32} className="text-[#C29591]" /></div>
         <h2 className="text-xl font-light tracking-[0.3em] text-[#463E3E] uppercase">Reservation Confirmed</h2>
         <p className="text-[10px] text-gray-400 mt-2 tracking-widest mb-10">您的預約已成功送出，期待與您相見</p>
-        
         <div className="bg-white border border-[#EAE7E2] shadow-lg overflow-hidden relative text-left">
           <div className="h-1 bg-[#C29591]"></div>
           {selItem?.images?.[0] && <div className="w-full h-56 relative group">
@@ -757,7 +743,6 @@ export default function App() {
                 </div>
               </div>
           </div>}
-          
           <div className="p-8 space-y-4 text-xs tracking-wide">
             <div className="bg-[#FAF9F6] border border-[#EAE7E2] p-4 text-center mb-8">
                 <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">預約時間</p>
@@ -768,13 +753,11 @@ export default function App() {
                 </div>
                 <div className="mt-2 text-xs font-bold text-[#C29591]">{settings.stores.find(s=>s.id===bookData.storeId)?.name}</div>
             </div>
-            
             {[
               ['顧客姓名', bookData.name], ['聯絡電話', bookData.phone], ['電子信箱', bookData.email],
               ['加購項目', selAddon?.name || '無'], ['總時長', `${getDuration()} 分鐘`], ['付款方式', bookData.paymentMethod],
               ['備註', bookData.remarks || '無']
             ].map(([l, v]) => <div key={l} className="flex justify-between border-b border-dashed border-gray-100 pb-2"><span className="text-gray-400">{l}</span><span className="font-medium text-[#463E3E]">{v}</span></div>)}
-            
             <div className="mt-8 pt-6 border-t border-[#EAE7E2] flex justify-between items-end">
                 <span className="text-[10px] font-bold text-gray-400 tracking-[0.2em] uppercase">Total Amount</span>
                 <div className="text-2xl font-bold text-[#C29591] leading-none">
@@ -792,7 +775,6 @@ export default function App() {
       case 'catalog': return (
         <div className="max-w-7xl mx-auto px-6 space-y-8">
           <div className="flex flex-col gap-6 border-b pb-8 mb-8">
-            {/* ... 搜尋與篩選 ... */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center pb-4 border-b border-dashed border-gray-200">
                 <div className="flex items-center gap-2 w-full md:w-auto relative">
                     <Search size={14} className="absolute left-3 text-gray-400"/>
@@ -804,19 +786,7 @@ export default function App() {
                         className="pl-9 pr-4 py-2 border border-gray-200 rounded-full text-xs w-full md:w-64 outline-none focus:border-[#C29591] bg-white transition-colors"
                     />
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400 font-bold tracking-widest"><ArrowDownUp size={12} className="inline mr-1"/>SORT</span>
-                    <select 
-                        value={sortOption} 
-                        onChange={(e) => setSortOption(e.target.value)}
-                        className="text-xs border border-gray-200 rounded-full px-3 py-1.5 outline-none bg-white text-gray-600 focus:border-[#C29591]"
-                    >
-                        <option value="popular">熱門排行</option>
-                        <option value="latest">最新上架</option>
-                    </select>
-                </div>
             </div>
-
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
               <span className="text-[10px] text-gray-400 font-bold tracking-widest w-16 pt-2">STYLE</span>
               <div className="flex flex-wrap gap-2 flex-1">
@@ -831,12 +801,9 @@ export default function App() {
             </div>
             {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
           </div>
-          
           <div className="grid md:grid-cols-3 gap-10">
             {paginatedItems.length > 0 ? paginatedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} onAddToCart={addToCart} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
           </div>
-
-          {/* 分頁控制器 (Pagination Controls) */}
           {processedItems.length > 0 && (
               <div className="flex justify-center items-center gap-4 pt-8 pb-24">
                   <button 
@@ -989,7 +956,6 @@ export default function App() {
                 <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">門市管理</h4><p className="text-[10px] text-gray-400 mt-1">設定品牌旗下的所有分店</p></div>
                 <div className="flex gap-2"><input type="text" className="flex-1 border p-2 text-xs" placeholder="新門市名稱" value={inputs.store} onChange={e=>setInputs(p=>({...p, store:e.target.value}))} /><button onClick={()=>{if(!inputs.store)return; saveSettings({...settings, stores:[...settings.stores, {id:Date.now().toString(), name:inputs.store, cleaningTime:20, pedicureChairs:1}]}); setInputs(p=>({...p, store:''}))}} className="bg-[#463E3E] text-white px-4 text-xs">新增</button></div>
                 <div className="grid md:grid-cols-3 gap-4">{settings.stores.map(s => <div key={s.id} className="border p-4 bg-white shadow-sm flex flex-col gap-3"><div className="flex justify-between font-bold text-sm text-[#463E3E]"><span>{s.name}</span><button onClick={()=>confirm('刪除？') && saveSettings({...settings, stores:settings.stores.filter(i=>i.id!==s.id)})}><Trash2 size={14}/></button></div><div className="flex items-center gap-2 bg-[#FAF9F6] p-2 rounded text-[10px] text-gray-500"><Clock size={12}/> 整備: <input type="number" defaultValue={s.cleaningTime||20} className="w-10 text-center border" onBlur={e=>saveSettings({...settings, stores:settings.stores.map(i=>i.id===s.id?{...i, cleaningTime:Number(e.target.value)}:i)})} />分</div>
-                {/* 新增足部椅設定 */}
                 <div className="flex items-center gap-2 bg-[#FAF9F6] p-2 rounded text-[10px] text-gray-500"><Armchair size={12}/> 足部椅: <input type="number" defaultValue={s.pedicureChairs||1} className="w-10 text-center border" onBlur={e=>saveSettings({...settings, stores:settings.stores.map(i=>i.id===s.id?{...i, pedicureChairs:Number(e.target.value)}:i)})} />張</div>
                 </div>)}</div>
               </div>}
@@ -1017,7 +983,6 @@ export default function App() {
                     <div className="flex gap-2 items-center bg-[#FAF9F6] p-3 border"><select className="text-xs border p-2" value={inputs.holiday.storeId} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,storeId:e.target.value}}))}><option value="all">全品牌</option>{settings.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><input type="date" className="flex-1 p-2 border text-xs" value={inputs.holiday.date} onChange={e=>setInputs(p=>({...p,holiday:{...p.holiday,date:e.target.value}}))}/><button onClick={()=>{if(inputs.holiday.date) saveSettings({...settings, holidays:[...settings.holidays, inputs.holiday]})}} className="bg-[#463E3E] text-white px-4 py-2 text-[10px]">新增</button></div><div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">{settings.holidays.map((h,i)=><span key={i} className="text-[10px] bg-gray-100 text-gray-500 px-3 py-1.5 border flex gap-2">{h.date} ({h.storeId==='all'?'全':settings.stores.find(s=>s.id===h.storeId)?.name}) <X size={12} className="cursor-pointer" onClick={()=>saveSettings({...settings, holidays:settings.holidays.filter((_,idx)=>idx!==i)})}/></span>)}</div>
                 </div>
               </div>}
-              
               {mgrTab === 'bookings' && <div className="h-full flex flex-col space-y-4">
                 <div className="flex justify-between border-b pb-4">
                     <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">預約訂單管理</h4><p className="text-[10px] text-gray-400 mt-1">查看與管理顧客預約(近三月內預約)</p></div>
@@ -1032,7 +997,6 @@ export default function App() {
                     {dayBookings.length > 0 ? dayBookings.map(b=><div key={b.id} className="border p-2 bg-white shadow-sm text-xs relative pl-4"><div className="absolute left-0 top-0 bottom-0 w-1 bg-[#C29591]"></div><div className="flex justify-between items-center"><div className="font-bold text-lg">{b.time}</div><div className="flex gap-2"><button onClick={()=>handleDeleteBooking(b.id)}><Trash2 size={12} className="text-gray-300 hover:text-red-500"/></button></div></div><div className="font-bold">{b.name}</div><div className="text-[10px] text-gray-400">{b.phone}</div><div className="mt-1 pt-1 border-t border-dashed flex justify-between text-[10px]"><span>{b.itemTitle}</span><span className="text-[#C29591]">NT${b.totalAmount}</span></div></div>) : <p className="text-center text-gray-400 text-xs py-10">無預約</p>}
                 </div></div>}
               </div>}
-
               {mgrTab === 'blacklist' && <div className="space-y-6">
                   <div className="border-l-4 border-[#C29591] pl-4">
                       <h4 className="text-sm font-bold tracking-widest text-[#463E3E]">黑名單管理</h4>
