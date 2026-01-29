@@ -3,7 +3,7 @@ import { Plus, X, Lock, Trash2, Edit3, Settings, Clock, CheckCircle, Upload, Che
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDocs, where } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import emailjs from '@emailjs/browser';
 
 const firebaseConfig = {
@@ -27,7 +27,7 @@ const CONSTANTS = {
   CLEAN: 20, MAX_DAYS: 30,
   IMG_WAWA: "https://drive.google.com/thumbnail?id=19CcU5NwecoqA0Xe4rjmHc_4OM_LGFq78&sz=w1000",
   IMG_STORE: "https://drive.google.com/thumbnail?id=1LKfqD6CfqPsovCs7fO_r6SQY6YcNtiNX&sz=w1000",
-  ITEMS_PER_PAGE: 18
+  ITEMS_PER_PAGE: 24 // 已修改：每頁顯示 24 樣商品
 };
 
 const NOTICE_ITEMS = [
@@ -77,7 +77,7 @@ const fetchWithCache = async (key, fetcher, setter) => {
     localStorage.setItem(key, JSON.stringify({ data, timestamp: now }));
 };
 
-// --- 圖片壓縮函式 (省流量神器) ---
+// 圖片壓縮函式
 const compressImage = (file) => {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -87,7 +87,7 @@ const compressImage = (file) => {
             img.src = event.target.result;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const maxWidth = 800; // 限制最大寬度 800px
+                const maxWidth = 800; 
                 let width = img.width;
                 let height = img.height;
                 if (width > maxWidth) {
@@ -100,10 +100,27 @@ const compressImage = (file) => {
                 ctx.drawImage(img, 0, 0, width, height);
                 canvas.toBlob((blob) => {
                     resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
-                }, 'image/jpeg', 0.8); // 80% 品質
+                }, 'image/jpeg', 0.8);
             };
         };
     });
+};
+
+// 刪除圖片函式
+const deleteImageFromUrl = async (url) => {
+    if (!url || !url.includes('firebasestorage')) return;
+    try {
+        const baseUrl = "https://firebasestorage.googleapis.com/v0/b/uniwawa-beauty.firebasestorage.app/o/";
+        let path = url.replace(baseUrl, "");
+        path = path.split("?")[0]; 
+        path = decodeURIComponent(path); 
+        
+        const imgRef = ref(storage, path);
+        await deleteObject(imgRef);
+        console.log("Deleted image:", path);
+    } catch (e) {
+        console.warn("Failed to delete image:", e);
+    }
 };
 
 // --- 元件：風格卡片 ---
@@ -128,7 +145,7 @@ const StyleCard = ({ item, isLoggedIn, onEdit, onDelete, onBook, onAddToCart, ad
       {isLoggedIn && (
         <div className="absolute top-4 right-4 flex gap-2 z-[30]">
           <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-2 bg-white/90 rounded-full text-gray-600 shadow-sm hover:scale-110 transition-transform"><Edit3 size={16}/></button>
-          <button onClick={(e) => { e.stopPropagation(); confirm('確定刪除？') && onDelete(item.id); }} className="p-2 bg-white/90 rounded-full text-gray-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
+          <button onClick={(e) => { e.stopPropagation(); confirm('確定刪除？') && onDelete(item); }} className="p-2 bg-white/90 rounded-full text-gray-600 shadow-sm hover:scale-110 transition-transform"><Trash2 size={16}/></button>
         </div>
       )}
       <div className="aspect-[3/4] overflow-hidden relative bg-gray-50" onTouchStart={e=>handleTouch(e,'s')} onTouchMove={e=>handleTouch(e,'m')} onTouchEnd={e=>handleTouch(e,'e')}>
@@ -385,7 +402,7 @@ export default function App() {
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [sortOption, setSortOption] = useState('latest'); // 預設改為最新，因為沒有即時讀取預約資料，無法算熱門
+  const [sortOption, setSortOption] = useState('latest'); 
 
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
@@ -397,7 +414,6 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    fetchWithCache('uniwawa_settings', async () => ({}), () => {});
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'settings'), d => d.exists() && setSettings(s => ({ ...s, ...d.data() })));
 
     fetchWithCache(
@@ -421,19 +437,19 @@ export default function App() {
     return () => { unsubSettings(); };
   }, [user]);
 
-  // --- 關鍵優化：只在需要時讀取預約資料 (Booking, Search, Admin) ---
+  // --- 關鍵優化：只在需要時讀取預約資料 ---
   useEffect(() => {
       if (!user) return;
       
-      // 只有當使用者進入預約表單、查詢頁面或後台時，才連線讀取預約資料
       if (step === 'form' || tab === 'search' || status.mgrOpen) {
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().split('T')[0];
+          // 已修改：讀取一個月前 (30天前) 至今的所有預約
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - 30);
+          const startDateStr = startDate.toISOString().split('T')[0];
 
           const bookingsQuery = query(
               collection(db, 'artifacts', appId, 'public', 'data', 'bookings'),
-              where('date', '>=', yesterdayStr)
+              where('date', '>=', startDateStr)
           );
 
           const unsub = onSnapshot(bookingsQuery, (s) => {
@@ -448,6 +464,7 @@ export default function App() {
       if (mgrTab === 'bookings' && bookings.length > 0) {
           const today = getTodayStr();
           const relevantBookings = bookings.filter(b => adminSel.store === 'all' || String(b.storeId) === String(adminSel.store));
+          // 預設選擇最近一筆未來的，如果沒有則選今天
           const upcoming = relevantBookings.sort((a, b) => new Date(a.date) - new Date(b.date)).find(b => b.date >= today);
           setAdminSel(prev => ({ ...prev, date: upcoming ? upcoming.date : today }));
       }
@@ -483,6 +500,23 @@ export default function App() {
     setEditItem(item);
     setFormData(item ? { ...item, tags: item.tags?.join(', ') || '' } : { title: '', price: '', category: settings.styleCategories[0] || '極簡氣質', duration: '90', images: [], tags: '' });
     setStatus(p => ({ ...p, uploadOpen: true }));
+  };
+  
+  const handleDeleteItem = async (item) => {
+      if (!confirm('確定刪除此款式？(圖片將一併刪除)')) return;
+      
+      try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', item.id));
+          if (item.images && item.images.length > 0) {
+              await Promise.all(item.images.map(url => deleteImageFromUrl(url)));
+          }
+          setItems(prev => prev.filter(i => i.id !== item.id));
+          localStorage.removeItem('uniwawa_designs');
+          alert('刪除成功');
+      } catch (error) {
+          console.error("Delete Error:", error);
+          alert('刪除時發生錯誤');
+      }
   };
 
   const getDuration = () => (Number(selItem?.duration) || 90) + (Number(selAddon?.duration) || 0);
@@ -652,7 +686,6 @@ export default function App() {
         res = res.filter(i => i.title.toLowerCase().includes(lowerKey) || i.tags?.some(t => t.toLowerCase().includes(lowerKey)));
     }
 
-    // 因為延遲載入預約資料，無法計算即時熱門，故預設使用建立時間排序 (Latest)
     res.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
     return res;
@@ -802,7 +835,7 @@ export default function App() {
             {filters.tag && <div className="flex justify-center mt-2"><button onClick={() => setFilters(p=>({...p, tag:''}))} className="flex items-center gap-2 bg-[#C29591] text-white px-4 py-1.5 rounded-full text-xs">#{filters.tag} <X size={14} /></button></div>}
           </div>
           <div className="grid md:grid-cols-3 gap-10">
-            {paginatedItems.length > 0 ? paginatedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={id => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'nail_designs', id))} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} onAddToCart={addToCart} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
+            {paginatedItems.length > 0 ? paginatedItems.map(i => <StyleCard key={i.id} item={i} isLoggedIn={isLoggedIn} onEdit={handleOpenUpload} onDelete={handleDeleteItem} onBook={(it, ad) => { setSelItem(it); setSelAddon(ad); setBookData({ name: '', phone: '', email: '', date: '', time: '', storeId: '', paymentMethod: '門市付款 (現金/轉帳/Line Pay)', remarks: '' }); setStep('form'); window.scrollTo(0,0); }} onAddToCart={addToCart} addons={addons} onTagClick={t => setFilters(p=>({...p, tag:t}))} />) : <div className="col-span-3 text-center py-20 text-gray-300 text-xs">沒有符合條件的款式</div>}
           </div>
           {processedItems.length > 0 && (
               <div className="flex justify-center items-center gap-4 pt-8 pb-24">
