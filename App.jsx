@@ -402,7 +402,9 @@ export default function App() {
   const [editItem, setEditItem] = useState(null);
   const [filters, setFilters] = useState({ style: '全部', price: '全部', tag: '' });
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [sortOption, setSortOption] = useState('latest'); 
+  
+  // *** 更新處 1：預設排序改為 'popular' ***
+  const [sortOption, setSortOption] = useState('popular'); 
 
   const [formData, setFormData] = useState({ title: '', price: '', category: '極簡氣質', duration: '90', images: [], tags: '' });
   const [files, setFiles] = useState([]);
@@ -441,7 +443,8 @@ export default function App() {
   useEffect(() => {
       if (!user) return;
       
-      if (step === 'form' || tab === 'search' || status.mgrOpen) {
+      // *** 更新處 2：前台目錄也需要預約資料來統計排行 ***
+      if (step === 'form' || tab === 'search' || status.mgrOpen || tab === 'catalog') {
           // 已修改：讀取一個月前 (30天前) 至今的所有預約
           const startDate = new Date();
           startDate.setDate(startDate.getDate() - 30);
@@ -669,6 +672,7 @@ export default function App() {
     } catch (err) { alert("失敗：" + err.message); } finally { setStatus(p => ({ ...p, uploading: false })); }
   };
 
+  // *** 更新處 3：正式加入商品排序逻辑（熱門 vs 最新） ***
   const processedItems = useMemo(() => {
     let res = items.filter(i => {
         const p = Number(i.price);
@@ -686,10 +690,26 @@ export default function App() {
         res = res.filter(i => i.title.toLowerCase().includes(lowerKey) || i.tags?.some(t => t.toLowerCase().includes(lowerKey)));
     }
 
-    res.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    if (sortOption === 'popular') {
+        // 統計預約次數作為熱門度
+        const popularityMap = bookings.reduce((acc, b) => {
+            if (b.itemTitle) acc[b.itemTitle] = (acc[b.itemTitle] || 0) + 1;
+            return acc;
+        }, {});
+        
+        res.sort((a, b) => {
+            const countA = popularityMap[a.title] || 0;
+            const countB = popularityMap[b.title] || 0;
+            if (countB === countA) return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+            return countB - countA;
+        });
+    } else {
+        // 最新上架 (由新到舊)
+        res.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    }
 
     return res;
-  }, [items, filters, catalogSearch, bookings]);
+  }, [items, filters, catalogSearch, sortOption, bookings]);
 
   const paginatedItems = useMemo(() => {
       const startIndex = (currentPage - 1) * CONSTANTS.ITEMS_PER_PAGE;
@@ -818,6 +838,18 @@ export default function App() {
                         onChange={(e) => setCatalogSearch(e.target.value)}
                         className="pl-9 pr-4 py-2 border border-gray-200 rounded-full text-xs w-full md:w-64 outline-none focus:border-[#C29591] bg-white transition-colors"
                     />
+                </div>
+                {/* *** 更新處 4：加入與你原版風格一致的排序選單 *** */}
+                <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-[#EAE7E2] shadow-sm">
+                    <ArrowDownUp size={12} className="text-[#C29591]" />
+                    <select 
+                        value={sortOption}
+                        onChange={(e) => setSortOption(e.target.value)}
+                        className="text-[10px] md:text-xs bg-transparent border-none outline-none text-[#463E3E] font-bold tracking-widest cursor-pointer"
+                    >
+                        <option value="popular">熱門排行</option>
+                        <option value="latest">最新上架</option>
+                    </select>
                 </div>
             </div>
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start">
@@ -1003,7 +1035,7 @@ export default function App() {
                 </div>
                 <div className="space-y-6">
                     <div className="border-l-4 border-[#C29591] pl-4"><h4 className="text-sm font-bold tracking-widest text-[#463E3E]">加購品項</h4><p className="text-[10px] text-gray-400 mt-1">設定如「卸甲」、「延甲」等額外服務</p></div>
-                    <div className="bg-[#FAF9F6] p-4 border space-y-3"><input placeholder="名稱" value={inputs.addon.name} onChange={e=>setInputs(p=>({...p,addon:{...p.addon,name:e.target.value}}))} className="w-full border p-2 text-xs"/><div className="flex gap-2"><input placeholder="金額" value={inputs.addon.price} onChange={e=>setInputs(p=>({...p,addon:{...p.addon,price:e.target.value}}))} className="w-1/2 border p-2 text-xs"/><input placeholder="分鐘" value={inputs.addon.duration} onChange={e=>setInputs(p=>({...p,addon:{...p.addon,duration:e.target.value}}))} className="w-1/2 border p-2 text-xs"/></div><button onClick={()=>{if(inputs.addon.name&&inputs.addon.price) addDoc(collection(db,'artifacts',appId,'public','data','addons'),{...inputs.addon,price:Number(inputs.addon.price),duration:Number(inputs.addon.duration),createdAt:serverTimestamp()}); setInputs(p=>({...p,addon:{name:'',price:'',duration:''}}));}} className="w-full bg-[#463E3E] text-white py-2 text-[10px]">新增</button></div><div className="max-h-60 overflow-y-auto space-y-2">{addons.map(a=><div key={a.id} className="border p-3 flex justify-between bg-white"><div><div className="text-xs font-bold">{a.name}</div><div className="text-[10px] text-gray-400">+${a.price} / {a.duration}分</div></div><button onClick={()=>confirm('刪除？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','addons',a.id))}><Trash2 size={12}/></button></div>)}</div>
+                    <div className="bg-[#FAF9F6] p-4 border space-y-3"><input placeholder="名稱" value={inputs.addon.name} onChange={e=>setInputs(p=>({...p,addon:{...p.addon,name:e.target.value}}))} className="w-full border p-2 text-xs"/><div className="flex gap-2"><input placeholder="金額" value={inputs.addon.price} onChange={e=>setInputs(p=>({...p,addon:{...p.addon,price:e.target.value}}))} className="w-1/2 border p-2 text-xs"/><input placeholder="分鐘" value={inputs.addon.duration} onChange={e=>setInputs(p=>({...p,addon:{...p.addon,duration:e.target.value}}))} className="w-1/2 border p-2 text-xs"/></div><button onClick={()=>{if(inputs.addon.name&&inputs.addon.price) addDoc(collection(db,'artifacts',appId,'public', 'data', 'addons'),{...inputs.addon,price:Number(inputs.addon.price),duration:Number(inputs.addon.duration),createdAt:serverTimestamp()}); setInputs(p=>({...p,addon:{name:'',price:'',duration:''}}));}} className="w-full bg-[#463E3E] text-white py-2 text-[10px]">新增</button></div><div className="max-h-60 overflow-y-auto space-y-2">{addons.map(a=><div key={a.id} className="border p-3 flex justify-between bg-white"><div><div className="text-xs font-bold">{a.name}</div><div className="text-[10px] text-gray-400">+${a.price} / {a.duration}分</div></div><button onClick={()=>confirm('刪除？')&&deleteDoc(doc(db,'artifacts',appId,'public','data','addons',a.id))}><Trash2 size={12}/></button></div>)}</div>
                 </div>
               </div>}
               {mgrTab === 'staff_holiday' && <div className="grid lg:grid-cols-2 gap-12">
