@@ -531,25 +531,37 @@ export default function App() {
     return t.includes('足') || c.includes('足');
   };
 
-  const isTimeFull = (date, time) => {
+const isTimeFull = (date, time) => {
     if (!date || !time || !bookData.storeId) return false;
+    
+    // 1. 基本時間過期檢查 (預約時間必須在 1.5 小時後)
     if (new Date(`${date} ${time}`) < new Date(Date.now() + 5400000)) return true;
     
+    // 2. 獲取該門市的正確設定與可用人數
+    const store = settings.stores.find(s => String(s.id) === String(bookData.storeId));
+    const storeName = store?.name; // 取得門市名稱做為雙重比對
     const storeStaff = (settings.staff || []).filter(s => String(s.storeId) === String(bookData.storeId));
     const availStaff = storeStaff.filter(s => !(s.leaveDates || []).includes(date)).length;
+    
+    // 如果該天該店沒人上班，直接額滿
     if (availStaff <= 0) return true;
 
-    const store = settings.stores.find(s => s.id === bookData.storeId);
     const clean = Number(store?.cleaningTime) || CONSTANTS.CLEAN;
     const start = timeToMin(time);
     const duration = getDuration();
     const end = start + duration + clean;
 
-    const overlapping = bookings.filter(b => b.date === date && String(b.storeId) === String(bookData.storeId) && 
-      ((timeToMin(b.time) < end) && ((timeToMin(b.time) + (Number(b.totalDuration) || 90) + clean) > start)));
+    // 3. 過濾出該門市在該時段「已存在」的預約 (包含 ID 或 名稱比對)
+    const overlapping = bookings.filter(b => 
+      b.date === date && 
+      (String(b.storeId) === String(bookData.storeId) || b.storeName === storeName) && 
+      ((timeToMin(b.time) < end) && ((timeToMin(b.time) + (Number(b.totalDuration) || 90) + clean) > start))
+    );
     
+    // 核心邏輯：如果預約數大於等於上班人數，就回傳 true (額滿)
     if (overlapping.length >= availStaff) return true;
 
+    // 4. 足部服務特殊硬體檢查 (椅子數量)
     if (isPedicureItem(selItem?.title, selItem?.category)) {
         const chairLimit = Number(store?.pedicureChairs) || 1;
         const overlappingPedicures = overlapping.filter(b => {
@@ -586,30 +598,81 @@ export default function App() {
       }
   };
 
-  const confirmBooking = async () => {
+const confirmBooking = async () => {
+    // 【最後防線】在寫入資料庫前，再次執行所有檢查
+    
+    // 1. 黑名單檢查
     if ((settings.blacklist || []).includes(bookData.phone)) {
         alert("此號碼無法進行預約，請聯繫客服。");
         return;
     }
 
+    // 2. 競爭檢查：防止在你填表單期間，時段被別人搶走
+    // 這裡會再次調用上面的 isTimeFull
+    if (isTimeFull(bookData.date, bookData.time)) {
+        alert("【預約失敗】非常抱歉，這個時段剛剛已被其他客人預約，請返回選擇其他時段。");
+        // 強制重置時間，讓 UI 自動刷新按鈕狀態
+        setBookData(p => ({ ...p, time: '' }));
+        return;
+    }
+
+    // 3. 檢查潘小姐這種「連續點擊」或「重複預約」的情況 (同電話在同時間)
+    const isDuplicate = bookings.some(b => 
+        b.date === bookData.date && 
+        b.time === bookData.time && 
+        b.phone === bookData.phone
+    );
+    if (isDuplicate) {
+        alert("系統偵測到您已預約過此時段，請勿重複提交。");
+        return;
+    }
+
+    // --- 若通過以上檢查，才執行原本的寫入流程 ---
     setStatus(p => ({ ...p, submitting: true }));
-    const amount = getAmount(); const duration = getDuration();
-    const storeName = settings.stores.find(s => s.id === bookData.storeId)?.name || '未指定';
+    const amount = getAmount(); 
+    const duration = getDuration();
+    const currentStore = settings.stores.find(s => String(s.id) === String(bookData.storeId));
+    const storeName = currentStore?.name || '未指定';
+
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
-        ...bookData, storeName, itemTitle: selItem?.title, addonName: selAddon?.name || '無',
+        ...bookData, 
+        storeName, 
+        itemTitle: selItem?.title, 
+        addonName: selAddon?.name || '無',
         category: selItem?.category || '',
-        totalAmount: amount, totalDuration: duration, createdAt: serverTimestamp()
+        totalAmount: amount, 
+        totalDuration: duration, 
+        createdAt: serverTimestamp()
       });
+
+      // EmailJS 發送邏輯 (維持你原有的設定)
       await emailjs.send('service_uniwawa', 'template_d5tq1z9', {
-        to_email: bookData.email, staff_email: 'unibeatuy@gmail.com', to_name: bookData.name, phone: bookData.phone,
-        store_name: storeName, booking_date: bookData.date, booking_time: bookData.time,
-        item_title: selItem?.title, addon_name: selAddon?.name || '無', total_amount: amount, total_duration: duration, 
-        notice_content: NOTICE_TEXT, remarks: bookData.remarks
+        to_email: bookData.email, 
+        staff_email: 'unibeatuy@gmail.com', 
+        to_name: bookData.name, 
+        phone: bookData.phone,
+        store_name: storeName, 
+        booking_date: bookData.date, 
+        booking_time: bookData.time,
+        item_title: selItem?.title, 
+        addon_name: selAddon?.name || '無', 
+        total_amount: amount, 
+        total_duration: duration, 
+        notice_content: NOTICE_TEXT, 
+        remarks: bookData.remarks
       }, 'ehbGdRtZaXWft7qLM');
-      alert('預約成功！'); setStep('success');
-    } catch (e) { console.error(e); alert('預約記錄成功但信件發送失敗'); setStep('success'); }
-    finally { setStatus(p => ({ ...p, submitting: false })); }
+
+      alert('預約成功！'); 
+      setStep('success');
+    } catch (e) { 
+      console.error(e); 
+      // 即使郵件失敗，只要 addDoc 成功，就算預約成功
+      alert('預約已成功，但確認信發送失敗，請截圖此畫面備存。'); 
+      setStep('success'); 
+    } finally { 
+      setStatus(p => ({ ...p, submitting: false })); 
+    }
   };
 
   const handleExportCSV = () => {
